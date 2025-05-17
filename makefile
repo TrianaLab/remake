@@ -1,7 +1,3 @@
-# Generated Makefile for Remake CLI project
-include:
-- oci://ghcr.io/edu-diaz/ci.mk:latest
-
 GOBIN ?= $(shell go env GOBIN)
 ifeq ($(GOBIN),)
     GOBIN := $(shell go env GOPATH)/bin
