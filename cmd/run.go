@@ -23,35 +23,38 @@ package cmd
 
 import (
 	"fmt"
+	"os/exec"
 
+	"github.com/TrianaLab/remake/config"
+	"github.com/TrianaLab/remake/internal/run"
 	"github.com/spf13/cobra"
 )
 
-// runCmd represents the run command
-var runCmd = &cobra.Command{
-	Use:   "run",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+var runFile string
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("run called")
+// runCmd resolves includes and executes make target
+var runCmd = &cobra.Command{
+	Use:   "run <target>",
+	Short: "Run make target with remote includes resolved",
+	Args:  cobra.MinimumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// 1. ensure make exists
+		if _, err := exec.LookPath("make"); err != nil {
+			return fmt.Errorf("make not found in PATH")
+		}
+		// 2. load config
+		config.InitConfig()
+		// 3. determine file
+		file := runFile
+		if file == "" {
+			file = DetermineMakefile("Makefile")
+		}
+		// 4. run process
+		return run.Run(args, file)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(runCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// runCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// runCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	runCmd.Flags().StringVarP(&runFile, "file", "f", "", "Makefile to use (default: Makefile or makefile)")
 }

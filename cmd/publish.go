@@ -23,35 +23,60 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
+	"strings"
 
+	"github.com/TrianaLab/remake/config"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
-// publishCmd represents the publish command
-var publishCmd = &cobra.Command{
-	Use:   "publish",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+var publishFile string
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("publish called")
+// publishCmd publishes a Makefile as an OCI artifact
+var publishCmd = &cobra.Command{
+	Use:   "publish <remote_ref>",
+	Short: "Publish a Makefile as an OCI artifact",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// load config
+		if err := config.InitConfig(); err != nil {
+			return err
+		}
+		// normalize ref
+		ref := args[0]
+		if !strings.HasPrefix(ref, "oci://") {
+			ref = "oci://" + viper.GetString("default_registry") + "/" + ref
+		}
+		// determine file
+		file := runFile
+		if file == "" {
+			file = DetermineMakefile("Makefile")
+		}
+		if file == "" {
+			return fmt.Errorf("no Makefile or makefile found; specify with --file")
+		}
+		// oras push
+		ociRef := strings.TrimPrefix(ref, "oci://")
+		cmdArgs := []string{
+			"push", ociRef,
+			"--artifact-type", "application/x-makefile",
+			fmt.Sprintf("%s:application/x-makefile", file),
+		}
+		orasCmd := exec.Command("oras", cmdArgs...)
+		orasCmd.Stdout = os.Stdout
+		orasCmd.Stderr = os.Stderr
+		orasCmd.Stdin = os.Stdin
+		if err := orasCmd.Run(); err != nil {
+			return fmt.Errorf("oras push failed: %w", err)
+		}
+		fmt.Printf("✅ Published %s to %s", file, ref)
+		return nil
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(publishCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// publishCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// publishCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	publishCmd.Flags().StringVarP(&publishFile, "file", "f", "", "Makefile to publish (default: Makefile or makefile)")
 }
