@@ -7,12 +7,15 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/TrianaLab/remake/config"
 )
 
 // FetchHTTP downloads a remote Makefile via HTTP(S) and caches it under .remake/cache
 func FetchHTTP(url string) (string, error) {
 	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(url)))
-	dest := filepath.Join(".remake", "cache", hash+".mk")
+	cacheDir := config.GetCacheDir()
+	dest := filepath.Join(cacheDir, hash+".mk")
 
 	// Return cached if exists
 	if _, err := os.Stat(dest); err == nil {

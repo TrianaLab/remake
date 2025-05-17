@@ -23,6 +23,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 
 	"github.com/TrianaLab/remake/config"
@@ -30,7 +31,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var runFile string
+var (
+	runFile    string
+	runNoCache bool
+)
 
 // runCmd resolves includes and executes make target
 var runCmd = &cobra.Command{
@@ -44,8 +48,12 @@ var runCmd = &cobra.Command{
 		}
 		// 2. load config
 		config.InitConfig()
+		// 2.1. si piden no-cache, limpio la caché
+		if runNoCache {
+			os.RemoveAll(config.GetCacheDir())
+		}
 		// 3. determine file
-		file := runFile
+		file := publishFile
 		if file == "" {
 			file = config.GetDefaultMakefile()
 		}
@@ -57,4 +65,5 @@ var runCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(runCmd)
 	runCmd.Flags().StringVarP(&runFile, "file", "f", "", "Makefile to use (default: Makefile or makefile)")
+	runCmd.Flags().BoolVar(&runNoCache, "no-cache", false, "Skip local cache and always fetch remote includes")
 }

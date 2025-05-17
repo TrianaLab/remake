@@ -2,8 +2,12 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")" && pwd)
-export GITHUB_USER=tu_usuario
-export GITHUB_TOKEN=tu_pat
+export GITHUB_USER=edu-diaz
+export GITHUB_TOKEN=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
+
+cd ..
+make install
+cd e2e-tests
 
 echo "==> 1. Login"
 remake login -u "$GITHUB_USER" -p "$GITHUB_TOKEN"
@@ -12,11 +16,11 @@ echo "==> 2. Publish ci.mk to GHCR"
 remake publish ${GITHUB_USER}/ci.mk:v0.1.0 -f "$ROOT/fixtures/ci.mk"
 
 echo "==> 3. Pull ci.mk (shorthand, latest)"
-remake pull ${GITHUB_USER}/ci.mk -o "$ROOT/pulled-ci.mk"
+remake pull ${GITHUB_USER}/ci.mk:v0.1.0 -o "$ROOT/pulled-ci.mk"
 
 echo "==> 4. Run remote module"
 cat > "$ROOT/Makefile.remote" <<EOF
-include ${GITHUB_USER}/ci.mk
+include oci://ghcr.io/${GITHUB_USER}/ci.mk:v0.1.0
 
 .PHONY: test
 test: ci

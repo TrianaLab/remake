@@ -7,13 +7,15 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/TrianaLab/remake/config"
 )
 
 // FetchOCI descarga un artifact OCI (vía oras), extrae UN archivo y lo cachea
 func FetchOCI(ociRef string) (string, error) {
 	ref := strings.TrimPrefix(ociRef, "oci://")
 	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(ociRef)))
-	cacheDir := filepath.Join(".remake", "cache")
+	cacheDir := config.GetCacheDir()
 	outPath := filepath.Join(cacheDir, hash+".mk")
 
 	// cached?

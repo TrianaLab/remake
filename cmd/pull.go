@@ -25,23 +25,37 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/TrianaLab/remake/config"
 	"github.com/TrianaLab/remake/internal/util"
 	"github.com/spf13/cobra"
 )
 
-var pullOutput string
+var (
+	pullOutput  string
+	pullNoCache bool
+)
 
 // pullCmd pulls a Makefile (local, HTTP, or OCI) into cache
 var pullCmd = &cobra.Command{
 	Use:   "pull <remote_ref>",
-	Short: "Pull a remote Makefile into cache (assumes ghcr.io and :latest)",
+	Short: "Pull a Makefile into cache (assumes ghcr.io and :latest)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// 1) Inicializar config para que default_registry esté disponible
+		if err := config.InitConfig(); err != nil {
+			return err
+		}
+		// 1.1. si piden no-cache, limpio la caché
+		if pullNoCache {
+			os.RemoveAll(config.GetCacheDir())
+		}
+		// 2) Resolver y cachear el makefile remoto/local
 		ref := args[0]
 		local, err := util.FetchMakefile(ref)
 		if err != nil {
 			return err
 		}
+		// 3) Si se indicó -o, moverlo; si no, imprimir la ruta
 		if pullOutput != "" {
 			return os.Rename(local, pullOutput)
 		}
@@ -53,4 +67,5 @@ var pullCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(pullCmd)
 	pullCmd.Flags().StringVarP(&pullOutput, "output", "o", "", "Output file path (default prints cache path)")
+	pullCmd.Flags().BoolVar(&pullNoCache, "no-cache", false, "Skip local cache and always fetch remote Makefile")
 }

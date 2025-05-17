@@ -27,3 +27,4 @@ go.work.sum
 
 # remake cache
 .remake/** */
+e2e-tests/.remake/** */

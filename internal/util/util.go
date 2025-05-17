@@ -9,38 +9,41 @@ import (
 	"github.com/TrianaLab/remake/config"
 )
 
-// NormalizeRef aplica default registry y tag `latest` si falta
+// NormalizeRef aplica ghcr.io como registry por defecto y añade :latest si falta.
+// Prefija con oci:// para artefactos OCI y deja HTTP/HTTPS intactos.
 func NormalizeRef(ref string) string {
-	// 1) HTTP URL
+	// HTTP(S) no se toca
 	if strings.HasPrefix(ref, "http://") || strings.HasPrefix(ref, "https://") {
 		return ref
 	}
-	// 2) OCI con esquema
+	// Si ya es OCI
 	if strings.HasPrefix(ref, "oci://") {
 		name := strings.TrimPrefix(ref, "oci://")
 		if !strings.Contains(name, ":") {
-			name = name + ":latest"
+			name += ":latest"
 		}
 		return "oci://" + name
 	}
-	// 3) Ruta local existente
+	// Si existe localmente, devolver ruta absoluta
 	if _, err := os.Stat(ref); err == nil {
-		abs, err := filepath.Abs(ref)
-		if err == nil {
+		if abs, err := filepath.Abs(ref); err == nil {
 			return abs
 		}
 		return ref
 	}
-	// 4) Destinar a default registry (shorthand)
-	defaultReg := config.GetDefaultRegistry() // ghcr.io por defecto
-	name := defaultReg + "/" + ref
-	if !strings.Contains(ref, ":") {
-		name = name + ":latest"
+	// Shorthand: repo[:tag] → oci://ghcr.io/repo[:tag]
+	defaultReg := config.GetDefaultRegistry()
+	name := ref
+	if !strings.Contains(name, ":") {
+		name += ":latest"
 	}
-	return "oci://" + name
+	return "oci://" + defaultReg + "/" + name
 }
 
-// FetchMakefile resuelve un ref local, HTTP(S) u OCI y devuelve la ruta cacheada o local
+// FetchMakefile normaliza y descarga:
+// - HTTP/HTTPS → FetchHTTP
+// - OCI        → FetchOCI
+// - local      → ruta absoluta
 func FetchMakefile(ref string) (string, error) {
 	nref := NormalizeRef(ref)
 	switch {
@@ -49,7 +52,6 @@ func FetchMakefile(ref string) (string, error) {
 	case strings.HasPrefix(nref, "oci://"):
 		return FetchOCI(nref)
 	default:
-		// local absolute
 		if _, err := os.Stat(nref); err == nil {
 			return nref, nil
 		}

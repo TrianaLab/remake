@@ -64,3 +64,13 @@ func GetDefaultMakefile() string {
 	}
 	return ""
 }
+
+// GetCacheDir devuelve la ruta al directorio de cache (~/.remake/cache)
+func GetCacheDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		// En caso de fallo, por seguridad usar cwd
+		return filepath.Join(".remake", "cache")
+	}
+	return filepath.Join(home, ".remake", "cache")
+}
