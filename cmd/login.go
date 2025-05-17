@@ -24,34 +24,53 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/TrianaLab/remake/config"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
-// loginCmd represents the login command
-var loginCmd = &cobra.Command{
-	Use:   "login",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+var (
+	loginUsername string
+	loginPassword string
+)
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("login called")
+var loginCmd = &cobra.Command{
+	Use:   "login [oci_endpoint]",
+	Short: "Login to an OCI registry and store credentials",
+	Args:  cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// Initialize or load config
+		if err := config.InitConfig(); err != nil {
+			return err
+		}
+
+		endpoint := viper.GetString("default_registry")
+		if len(args) == 1 {
+			endpoint = args[0]
+		}
+
+		// Store credentials
+		viper.Set(fmt.Sprintf("registries.%s.username", endpoint), loginUsername)
+		viper.Set(fmt.Sprintf("registries.%s.password", endpoint), loginPassword)
+
+		// Save updated config
+		if err := config.SaveConfig(); err != nil {
+			return err
+		}
+
+		fmt.Printf("✅ Logged in to %s\n", endpoint)
+		return nil
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(loginCmd)
 
-	// Here you will define your flags and configuration settings.
+	loginCmd.Flags().StringVarP(&loginUsername, "username", "u", "", "Registry username (required)")
+	loginCmd.Flags().StringVarP(&loginPassword, "password", "p", "", "Registry password (required)")
+	loginCmd.MarkFlagRequired("username")
+	loginCmd.MarkFlagRequired("password")
 
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// loginCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// loginCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	viper.BindPFlag("username", loginCmd.Flags().Lookup("username"))
+	viper.BindPFlag("password", loginCmd.Flags().Lookup("password"))
 }
