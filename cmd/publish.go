@@ -1,77 +1,124 @@
-/*
-Copyright © 2025 TrianaLab - Eduardo Diaz <edudiazasencio@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
 package cmd
 
 import (
+	"context"
 	"fmt"
-	"os"
-	"os/exec"
+	"path/filepath"
 	"strings"
 
-	"github.com/TrianaLab/remake/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/TrianaLab/remake/config"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+	oras "oras.land/oras-go/v2"
+	"oras.land/oras-go/v2/content/file"
+	"oras.land/oras-go/v2/registry/remote"
+	"oras.land/oras-go/v2/registry/remote/auth"
+	"oras.land/oras-go/v2/registry/remote/retry"
 )
 
 var publishFile string
 
-// publishCmd publishes a Makefile as an OCI artifact
+// publishCmd publica un Makefile como un artefacto OCI usando la librería ORAS Go
 var publishCmd = &cobra.Command{
 	Use:   "publish <remote_ref>",
 	Short: "Publish a Makefile as an OCI artifact",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// load config
+		// 1) Inicializar configuración
 		if err := config.InitConfig(); err != nil {
 			return err
 		}
-		// normalize ref
-		ref := args[0]
-		if !strings.HasPrefix(ref, "oci://") {
-			ref = "oci://" + viper.GetString("default_registry") + "/" + ref
+
+		// 2) Normalizar referencia y tag por defecto 'latest'
+		rawRef := args[0]
+		hasOCI := strings.HasPrefix(rawRef, "oci://")
+		raw := rawRef
+		if hasOCI {
+			raw = strings.TrimPrefix(rawRef, "oci://")
 		}
-		// determine file
-		file := runFile
-		if file == "" {
-			file = config.GetDefaultMakefile()
+		// Añadir "latest" si no hay tag tras el último '/'
+		name := raw[strings.LastIndex(raw, "/")+1:]
+		if !strings.Contains(name, ":") {
+			raw += ":latest"
 		}
-		if file == "" {
+		// Preponer registry si faltaba
+		if !hasOCI {
+			defaultReg := viper.GetString("default_registry")
+			raw = defaultReg + "/" + raw
+		}
+		ref := "oci://" + raw
+
+		// 3) Extraer host, repositorio y tag
+		parts := strings.SplitN(raw, "/", 2)
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid reference: %s", ref)
+		}
+		host := parts[0]
+		repoAndTag := parts[1]
+		rt := strings.SplitN(repoAndTag, ":", 2)
+		repoPath := rt[0]
+		tag := rt[1]
+
+		// 4) Determinar Makefile a publicar
+		filePath := publishFile
+		if filePath == "" {
+			filePath = config.GetDefaultMakefile()
+		}
+		if filePath == "" {
 			return fmt.Errorf("no Makefile or makefile found; specify with --file")
 		}
-		// oras push
-		ociRef := strings.TrimPrefix(ref, "oci://")
-		cmdArgs := []string{
-			"push", ociRef,
-			"--artifact-type", "application/x-makefile",
-			fmt.Sprintf("%s:application/x-makefile", file),
+
+		// 5) Crear file store y añadir el Makefile
+		ctx := context.Background()
+		fs, err := file.New(filepath.Dir(filePath))
+		if err != nil {
+			return err
 		}
-		orasCmd := exec.Command("oras", cmdArgs...)
-		orasCmd.Stdout = os.Stdout
-		orasCmd.Stderr = os.Stderr
-		orasCmd.Stdin = os.Stdin
-		if err := orasCmd.Run(); err != nil {
-			return fmt.Errorf("oras push failed: %w", err)
+		defer fs.Close()
+
+		desc, err := fs.Add(ctx, filePath, "application/x-makefile", "")
+		if err != nil {
+			return err
 		}
-		fmt.Printf("✅ Published %s to %s", file, ref)
+
+		// 6) Empaquetar el manifiesto OCI con la capa única
+		manifestDesc, err := oras.PackManifest(ctx, fs, oras.PackManifestVersion1_1,
+			"application/x-makefile", oras.PackManifestOptions{Layers: []v1.Descriptor{desc}})
+		if err != nil {
+			return err
+		}
+
+		// 7) Etiquetar el manifiesto localmente
+		if err := fs.Tag(ctx, manifestDesc, tag); err != nil {
+			return err
+		}
+
+		// 8) Configurar repositorio remoto
+		repoRef := host + "/" + repoPath
+		repo, err := remote.NewRepository(repoRef)
+		if err != nil {
+			return err
+		}
+		// 9) Autenticación si existe en config
+		username := viper.GetString(fmt.Sprintf("registries.%s.username", host))
+		password := viper.GetString(fmt.Sprintf("registries.%s.password", host))
+		repo.Client = &auth.Client{
+			Client: retry.DefaultClient,
+			Cache:  auth.NewCache(),
+			Credential: auth.StaticCredential(host, auth.Credential{
+				Username: username,
+				Password: password,
+			}),
+		}
+
+		// 10) Push del artefacto
+		if _, err := oras.Copy(ctx, fs, tag, repo, tag, oras.DefaultCopyOptions); err != nil {
+			return fmt.Errorf("failed to push artifact: %w", err)
+		}
+
+		fmt.Printf("✅ Published %s to %s\n", filePath, ref)
 		return nil
 	},
 }
