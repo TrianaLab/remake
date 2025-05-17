@@ -1,4 +1,0 @@
-include oci://ghcr.io/edu-diaz/ci.mk:v0.1.0
-
-.PHONY: test
-test: ci
