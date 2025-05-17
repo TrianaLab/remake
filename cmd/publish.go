@@ -52,7 +52,7 @@ var publishCmd = &cobra.Command{
 		// determine file
 		file := runFile
 		if file == "" {
-			file = DetermineMakefile("Makefile")
+			file = config.GetDefaultMakefile()
 		}
 		if file == "" {
 			return fmt.Errorf("no Makefile or makefile found; specify with --file")

@@ -47,7 +47,7 @@ var runCmd = &cobra.Command{
 		// 3. determine file
 		file := runFile
 		if file == "" {
-			file = DetermineMakefile("Makefile")
+			file = config.GetDefaultMakefile()
 		}
 		// 4. run process
 		return run.Run(args, file)

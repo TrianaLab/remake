@@ -25,41 +25,27 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/TrianaLab/remake/config"
 	"github.com/TrianaLab/remake/internal/util"
 	"github.com/spf13/cobra"
 )
 
 var pullOutput string
 
-// pullCmd represents the pull command
+// pullCmd pulls a Makefile (local, HTTP, or OCI) into cache
 var pullCmd = &cobra.Command{
 	Use:   "pull <remote_ref>",
-	Short: "Pull a remote Makefile (local, HTTP, or OCI) into local cache",
+	Short: "Pull a remote Makefile into cache (assumes ghcr.io and :latest)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Load config
-		if err := config.InitConfig(); err != nil {
+		ref := args[0]
+		local, err := util.FetchMakefile(ref)
+		if err != nil {
 			return err
 		}
-
-		ref := args[0]
-		// Resolve remote, fetch into cache or handle local
-		localPath, err := util.FetchMakefile(ref)
-		if err != nil {
-			return fmt.Errorf("failed to fetch makefile %s: %w", ref, err)
-		}
-
-		// Output or move
 		if pullOutput != "" {
-			if err := os.Rename(localPath, pullOutput); err != nil {
-				return err
-			}
-			fmt.Printf("✅ Saved to %s\n", pullOutput)
-		} else {
-			fmt.Println(localPath)
+			return os.Rename(local, pullOutput)
 		}
-
+		fmt.Println(local)
 		return nil
 	},
 }

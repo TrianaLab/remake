@@ -9,42 +9,42 @@ import (
 	"strings"
 )
 
-// FetchOCI pulls a Makefile artifact from an OCI registry using `oras` and caches it under .remake/cache
+// FetchOCI descarga un artifact OCI (vía oras), extrae UN archivo y lo cachea
 func FetchOCI(ociRef string) (string, error) {
 	ref := strings.TrimPrefix(ociRef, "oci://")
 	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(ociRef)))
-	outPath := filepath.Join(".remake", "cache", hash+".mk")
+	cacheDir := filepath.Join(".remake", "cache")
+	outPath := filepath.Join(cacheDir, hash+".mk")
 
-	// Return cached
+	// cached?
 	if _, err := os.Stat(outPath); err == nil {
 		return outPath, nil
 	}
 
-	// Pull via oras into temp dir
-	tmpDir := filepath.Join(".remake", "cache", "tmp-"+hash)
+	tmpDir := filepath.Join(cacheDir, "tmp-"+hash)
 	os.MkdirAll(tmpDir, 0o755)
 
+	// pull con oras
 	cmd := exec.Command("oras", "pull", ref, "-o", tmpDir)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("oras pull failed: %w", err)
 	}
 
-	// Find .mk file
-	files, err := filepath.Glob(filepath.Join(tmpDir, "*.mk"))
-	if err != nil || len(files) == 0 {
-		return "", fmt.Errorf("no .mk found in OCI artifact: %s", ociRef)
+	// busca *cualquier* fichero dentro de tmpDir
+	entries, err := os.ReadDir(tmpDir)
+	if err != nil || len(entries) == 0 {
+		return "", fmt.Errorf("no files found in OCI artifact: %s", ociRef)
 	}
+	// elige el primero (o podrías filtrar por ext .mk)
+	src := filepath.Join(tmpDir, entries[0].Name())
 
-	// Move to cache
-	os.MkdirAll(filepath.Dir(outPath), 0o755)
-	if err := os.Rename(files[0], outPath); err != nil {
+	// mover a cache
+	os.MkdirAll(cacheDir, 0o755)
+	if err := os.Rename(src, outPath); err != nil {
 		return "", err
 	}
-
-	// Cleanup
 	os.RemoveAll(tmpDir)
 
 	return outPath, nil

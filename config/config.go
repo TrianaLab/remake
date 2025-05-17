@@ -48,3 +48,19 @@ func SaveConfig() error {
 	}
 	return nil
 }
+
+// GetDefaultRegistry returns the configured default OCI registry (e.g., ghcr.io)
+func GetDefaultRegistry() string {
+	return viper.GetString("default_registry")
+}
+
+// GetDefaultMakefile returns "Makefile" or "makefile" if it exists in current directory, else empty string
+func GetDefaultMakefile() string {
+	if _, err := os.Stat("Makefile"); err == nil {
+		return "Makefile"
+	}
+	if _, err := os.Stat("makefile"); err == nil {
+		return "makefile"
+	}
+	return ""
+}
