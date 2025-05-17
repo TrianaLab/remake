@@ -53,7 +53,7 @@ var runCmd = &cobra.Command{
 			os.RemoveAll(config.GetCacheDir())
 		}
 		// 3. determine file
-		file := publishFile
+		file := pushFile
 		if file == "" {
 			file = config.GetDefaultMakefile()
 		}

@@ -18,12 +18,12 @@ import (
 	"oras.land/oras-go/v2/registry/remote/retry"
 )
 
-var publishFile string
+var pushFile string
 
-// publishCmd publica un Makefile como un artefacto OCI usando la librería ORAS Go
-var publishCmd = &cobra.Command{
-	Use:   "publish <remote_ref>",
-	Short: "Publish a Makefile as an OCI artifact",
+// pushCmd publica un Makefile como un artefacto OCI usando la librería ORAS Go
+var pushCmd = &cobra.Command{
+	Use:   "push <remote_ref>",
+	Short: "Push a Makefile as an OCI artifact",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// 1) Inicializar configuración
@@ -62,7 +62,7 @@ var publishCmd = &cobra.Command{
 		tag := rt[1]
 
 		// 4) Determinar Makefile a publicar
-		filePath := publishFile
+		filePath := pushFile
 		if filePath == "" {
 			filePath = config.GetDefaultMakefile()
 		}
@@ -118,12 +118,12 @@ var publishCmd = &cobra.Command{
 			return fmt.Errorf("failed to push artifact: %w", err)
 		}
 
-		fmt.Printf("✅ Published %s to %s\n", filePath, ref)
+		fmt.Printf("✅ Pushed %s to %s\n", filePath, ref)
 		return nil
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(publishCmd)
-	publishCmd.Flags().StringVarP(&publishFile, "file", "f", "", "Makefile to publish (default: Makefile or makefile)")
+	rootCmd.AddCommand(pushCmd)
+	pushCmd.Flags().StringVarP(&pushFile, "file", "f", "", "Makefile to push (default: Makefile or makefile)")
 }

@@ -1,33 +1,21 @@
-/*
-Copyright © 2025 TrianaLab - Eduardo Diaz <edudiazasencio@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	"github.com/TrianaLab/remake/config"
-	"github.com/TrianaLab/remake/internal/util"
-	"github.com/spf13/cobra"
+	oras "oras.land/oras-go/v2"
+	"oras.land/oras-go/v2/content/file"
+	"oras.land/oras-go/v2/registry/remote"
+	"oras.land/oras-go/v2/registry/remote/auth"
+	"oras.land/oras-go/v2/registry/remote/retry"
 )
 
 var (
@@ -35,31 +23,96 @@ var (
 	pullNoCache bool
 )
 
-// pullCmd pulls a Makefile (local, HTTP, or OCI) into cache
+// pullCmd descarga un Makefile desde un artefacto OCI usando la librería ORAS Go
 var pullCmd = &cobra.Command{
 	Use:   "pull <remote_ref>",
-	Short: "Pull a Makefile into cache (assumes ghcr.io and :latest)",
+	Short: "Pull a Makefile into cache (OCI, HTTP or local)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// 1) Inicializar config para que default_registry esté disponible
+		// 1) Inicializar config
 		if err := config.InitConfig(); err != nil {
 			return err
 		}
-		// 1.1. si piden no-cache, limpio la caché
+
+		// 1.1) Limpiar cache si se pidió
+		cacheDir := config.GetCacheDir()
 		if pullNoCache {
-			os.RemoveAll(config.GetCacheDir())
+			os.RemoveAll(cacheDir)
 		}
-		// 2) Resolver y cachear el makefile remoto/local
-		ref := args[0]
-		local, err := util.FetchMakefile(ref)
+
+		// 2) Normalizar ref
+		rawRef := args[0]
+		hasOCI := strings.HasPrefix(rawRef, "oci://")
+		raw := rawRef
+		if hasOCI {
+			raw = strings.TrimPrefix(rawRef, "oci://")
+		}
+		// Añadir latest si falta tag
+		name := raw[strings.LastIndex(raw, "/")+1:]
+		if !strings.Contains(name, ":") {
+			raw += ":latest"
+			name += ":latest"
+		}
+		// Extraer solo nombre de archivo sin tag
+		fileName := strings.SplitN(name, ":", 2)[0]
+		// Preponer registry
+		if !hasOCI {
+			raw = viper.GetString("default_registry") + "/" + raw
+		}
+		// Construir referencia final
+		reference := "oci://" + raw
+
+		// 3) Conectar con OCI remoto
+		parts := strings.SplitN(raw, "/", 2)
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid reference: %s", reference)
+		}
+		host := parts[0]
+		repoAndTag := parts[1]
+		rt := strings.SplitN(repoAndTag, ":", 2)
+		repoPath := rt[0]
+		tag := rt[1]
+
+		repoRef := host + "/" + repoPath
+		repo, err := remote.NewRepository(repoRef)
 		if err != nil {
 			return err
 		}
-		// 3) Si se indicó -o, moverlo; si no, imprimir la ruta
-		if pullOutput != "" {
-			return os.Rename(local, pullOutput)
+		// credenciales opcionales
+		username := viper.GetString(fmt.Sprintf("registries.%s.username", host))
+		password := viper.GetString(fmt.Sprintf("registries.%s.password", host))
+		repo.Client = &auth.Client{
+			Client: retry.DefaultClient,
+			Cache:  auth.NewCache(),
+			Credential: auth.StaticCredential(host, auth.Credential{
+				Username: username,
+				Password: password,
+			}),
 		}
-		fmt.Println(local)
+
+		// 4) Crear file store de destino
+		dir := filepath.Join(cacheDir, repoPath, tag)
+		fs, err := file.New(dir)
+		if err != nil {
+			return err
+		}
+		defer fs.Close()
+
+		// 5) Copiar artefacto remoto al file store
+		ctx := context.Background()
+		_, err = oras.Copy(ctx, repo, tag, fs, tag, oras.DefaultCopyOptions)
+		if err != nil {
+			return fmt.Errorf("failed to pull artifact: %w", err)
+		}
+
+		// 6) Ruta al Makefile descargado
+		localPath := filepath.Join(dir, fileName)
+
+		// 7) Mover o imprimir
+		if pullOutput != "" {
+			return os.Rename(localPath, pullOutput)
+		}
+		fmt.Println(localPath)
 		return nil
 	},
 }
