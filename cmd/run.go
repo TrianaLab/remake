@@ -9,8 +9,10 @@ import (
 )
 
 var (
-	runFile    string
-	runNoCache bool
+	runFile           string
+	runNoCache        bool
+	defaultMakefileFn = config.GetDefaultMakefile
+	runFn             = run.Run
 )
 
 var runCmd = &cobra.Command{
@@ -20,12 +22,12 @@ var runCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		file := runFile
 		if file == "" {
-			file = config.GetDefaultMakefile()
+			file = defaultMakefileFn()
 			if file == "" {
 				return fmt.Errorf("no Makefile found; specify with -f")
 			}
 		}
-		return run.Run(file, args, !runNoCache)
+		return runFn(file, args, !runNoCache)
 	},
 }
 
