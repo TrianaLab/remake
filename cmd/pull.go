@@ -10,9 +10,10 @@ import (
 )
 
 var (
-	pullFile     string
-	pullNoCache  bool
-	pullInsecure bool
+	pullFile       string
+	pullNoCache    bool
+	pullInsecure   bool
+	pullGetFetcher = util.GetFetcher
 )
 
 // pullCmd downloads a Makefile OCI artifact or HTTP URL.
@@ -24,7 +25,7 @@ var pullCmd = &cobra.Command{
 		ref := args[0]
 
 		// Select fetcher
-		fetcher, err := util.GetFetcher(ref)
+		fetcher, err := pullGetFetcher(ref)
 		if err != nil {
 			return err
 		}
