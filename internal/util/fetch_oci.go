@@ -25,14 +25,29 @@ func FetchOCI(ociRef string) (string, error) {
 	host, repoAndTag := parts[0], parts[1]
 	rt := strings.SplitN(repoAndTag, ":", 2)
 	repoPath, tag := rt[0], rt[1]
-	repoRef := host + "/" + repoPath
-	cacheDir := config.GetCacheDir()
-	os.MkdirAll(cacheDir, 0o755)
-	fs, err := file.New(cacheDir)
+
+	cacheRoot := config.GetCacheDir()
+	dir := filepath.Join(cacheRoot, repoPath, tag)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err == nil {
+		for _, e := range entries {
+			if !e.IsDir() {
+				return filepath.Join(dir, e.Name()), nil
+			}
+		}
+	}
+
+	fs, err := file.New(dir)
 	if err != nil {
 		return "", err
 	}
 	defer fs.Close()
+
+	repoRef := host + "/" + repoPath
 	repo, err := remote.NewRepository(repoRef)
 	if err != nil {
 		return "", err
@@ -47,22 +62,19 @@ func FetchOCI(ociRef string) (string, error) {
 			Password: password,
 		}),
 	}
+
 	ctx := context.Background()
 	if _, err := oras.Copy(ctx, repo, tag, fs, tag, oras.DefaultCopyOptions); err != nil {
 		return "", fmt.Errorf("failed to download OCI artifact: %w", err)
 	}
-	entries, err := os.ReadDir(cacheDir)
+
+	entries, err = os.ReadDir(dir)
 	if err != nil {
 		return "", err
 	}
 	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".mk") {
-			return filepath.Join(cacheDir, e.Name()), nil
-		}
-	}
-	for _, e := range entries {
 		if !e.IsDir() {
-			return filepath.Join(cacheDir, e.Name()), nil
+			return filepath.Join(dir, e.Name()), nil
 		}
 	}
 	return "", fmt.Errorf("no file found in OCI artifact: %s", ociRef)

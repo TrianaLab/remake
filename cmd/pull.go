@@ -31,6 +31,7 @@ var pullCmd = &cobra.Command{
 		if pullNoCache {
 			os.RemoveAll(cacheDir)
 		}
+
 		raw := args[0]
 		hasOCI := strings.HasPrefix(raw, "oci://")
 		ref := raw
@@ -46,10 +47,25 @@ var pullCmd = &cobra.Command{
 		if !hasOCI {
 			ref = viper.GetString("default_registry") + "/" + ref
 		}
+
 		parts := strings.SplitN(ref, "/", 2)
 		host, repoAndTag := parts[0], parts[1]
 		rt := strings.SplitN(repoAndTag, ":", 2)
 		repoPath, tag := rt[0], rt[1]
+
+		dir := filepath.Join(cacheDir, repoPath, tag)
+
+		localPath := filepath.Join(dir, fileName)
+		if !pullNoCache {
+			if _, err := os.Stat(localPath); err == nil {
+				if pullOutput != "" {
+					return os.Rename(localPath, pullOutput)
+				}
+				fmt.Println(localPath)
+				return nil
+			}
+		}
+
 		repoRef := host + "/" + repoPath
 		repo, err := remote.NewRepository(repoRef)
 		if err != nil {
@@ -65,7 +81,7 @@ var pullCmd = &cobra.Command{
 				Password: password,
 			}),
 		}
-		dir := filepath.Join(cacheDir, repoPath, tag)
+
 		fs, err := file.New(dir)
 		if err != nil {
 			return err
@@ -76,7 +92,8 @@ var pullCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to pull artifact: %w", err)
 		}
-		localPath := filepath.Join(dir, fileName)
+
+		localPath = filepath.Join(dir, fileName)
 		if pullOutput != "" {
 			return os.Rename(localPath, pullOutput)
 		}
