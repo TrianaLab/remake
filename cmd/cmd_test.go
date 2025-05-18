@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,12 @@ import (
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/registry"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"oras.land/oras-go/v2"
+	"oras.land/oras-go/v2/content/file"
+	"oras.land/oras-go/v2/registry/remote"
+	"oras.land/oras-go/v2/registry/remote/auth"
+	"oras.land/oras-go/v2/registry/remote/retry"
 )
 
 func TestRenderCmd_Local(t *testing.T) {
@@ -121,12 +128,6 @@ func TestRunCmd_SuccessLocal(t *testing.T) {
 	runNoCache = false
 	if err := runCmd.RunE(runCmd, []string{"all"}); err != nil {
 		t.Errorf("runCmd.RunE() success = %v; want nil", err)
-	}
-}
-
-func TestPushCmd_NoArgs(t *testing.T) {
-	if err := pushCmd.RunE(pushCmd, []string{}); err == nil {
-		t.Error("pushCmd without args should fail, err = nil")
 	}
 }
 
@@ -278,5 +279,85 @@ func TestRootCmd_HasSubCommands(t *testing.T) {
 		if !names[want] {
 			t.Errorf("rootCmd missing %q", want)
 		}
+	}
+}
+
+func TestPullCmd_Success_LocalRegistry(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+
+	reg := registry.New()
+	ts := httptest.NewServer(reg)
+	defer ts.Close()
+	host := strings.TrimPrefix(ts.URL, "http://")
+
+	dir := t.TempDir()
+	mf := filepath.Join(dir, "Makefile")
+	wantContent := "HELLO\n"
+	os.WriteFile(mf, []byte(wantContent), 0644)
+
+	ctx := context.Background()
+	fsStore, err := file.New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	desc, err := fsStore.Add(ctx, "Makefile", "application/x-makefile", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestDesc, err := oras.PackManifest(ctx, fsStore, oras.PackManifestVersion1_1,
+		"application/x-makefile", oras.PackManifestOptions{Layers: []v1.Descriptor{desc}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fsStore.Tag(ctx, manifestDesc, "latest"); err != nil {
+		t.Fatal(err)
+	}
+	repoRef := host + "/myrepo"
+	repo, err := remote.NewRepository(repoRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo.PlainHTTP = true
+	repo.Client = &auth.Client{Client: retry.DefaultClient, Cache: auth.NewCache()}
+	if _, err := oras.Copy(ctx, fsStore, "latest", repo, "latest", oras.DefaultCopyOptions); err != nil {
+		t.Fatal(err)
+	}
+
+	os.Remove("Makefile")
+
+	pullCmd.Flags().Set("insecure", "true")
+	uri := "oci://" + host + "/myrepo:latest"
+	if err := pullCmd.RunE(pullCmd, []string{uri}); err != nil {
+		t.Fatalf("pullCmd.RunE() error = %v", err)
+	}
+
+	if err := pullCmd.RunE(pullCmd, []string{uri}); err != nil {
+		t.Fatalf("pullCmd.RunE() error = %v", err)
+	}
+}
+
+func TestRunCmd_RemoteFetch(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		io.WriteString(w, "all:\n\t@echo R\n")
+	}))
+	defer srv.Close()
+
+	runFile = srv.URL + "/Makefile"
+	runCmd.Flags().Set("no-cache", "true")
+
+	oldOut := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	if err := runCmd.RunE(runCmd, []string{"all"}); err != nil {
+		t.Fatalf("runCmd.RunE() = %v", err)
+	}
+	w.Close()
+	os.Stdout = oldOut
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	if !strings.Contains(buf.String(), "R") {
+		t.Errorf("got %q, want output R", buf.String())
 	}
 }

@@ -18,15 +18,16 @@ import (
 	"oras.land/oras-go/v2/registry/remote/retry"
 )
 
-var pushFile string
+var (
+	pushFile     string
+	pushInsecure bool
+)
 
 var pushCmd = &cobra.Command{
 	Use:   "push <remote_ref>",
 	Short: "Push a Makefile as an OCI artifact",
+	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if len(args) != 1 {
-			return fmt.Errorf("argument <remote_ref> is required")
-		}
 
 		if err := config.InitConfig(); err != nil {
 			return err
@@ -86,6 +87,11 @@ var pushCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+
+		if pushInsecure {
+			repo.PlainHTTP = true
+		}
+
 		repo.Client = &auth.Client{
 			Client: retry.DefaultClient,
 			Cache:  auth.NewCache(),
@@ -106,4 +112,5 @@ var pushCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(pushCmd)
 	pushCmd.Flags().StringVarP(&pushFile, "file", "f", "", "Makefile to push (default: Makefile or makefile)")
+	pushCmd.Flags().BoolVar(&pushInsecure, "insecure", false, "Allow plain HTTP for registry")
 }

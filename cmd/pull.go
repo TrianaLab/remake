@@ -16,7 +16,10 @@ import (
 	"oras.land/oras-go/v2/registry/remote/retry"
 )
 
-var pullFile string
+var (
+	pullFile     string
+	pullInsecure bool
+)
 
 var pullCmd = &cobra.Command{
 	Use:   "pull <remote_ref>",
@@ -37,7 +40,7 @@ var pullCmd = &cobra.Command{
 		}
 
 		ref := strings.TrimPrefix(rawRef, "oci://")
-		if !strings.Contains(ref, ":") {
+		if !strings.HasSuffix(ref, ":latest") && !strings.Contains(strings.SplitN(ref, "/", 2)[1], ":") {
 			ref += ":latest"
 		}
 		if !strings.HasPrefix(rawRef, "oci://") {
@@ -53,12 +56,23 @@ var pullCmd = &cobra.Command{
 
 		parts := strings.SplitN(ref, "/", 2)
 		host := parts[0]
-		repoName := strings.SplitN(parts[1], ":", 2)[0]
+		repoAndTag := parts[1]
+		rt := strings.SplitN(repoAndTag, ":", 2)
+		repoName := rt[0]
+		tag := "latest"
+		if len(rt) == 2 {
+			tag = rt[1]
+		}
 		repoRef := host + "/" + repoName
 		repo, err := remote.NewRepository(repoRef)
 		if err != nil {
 			return err
 		}
+
+		if pullInsecure {
+			repo.PlainHTTP = true
+		}
+
 		repo.Client = &auth.Client{
 			Client: retry.DefaultClient,
 			Cache:  auth.NewCache(),
@@ -68,7 +82,6 @@ var pullCmd = &cobra.Command{
 			}),
 		}
 
-		tag := strings.SplitN(ref, ":", 2)[1]
 		if _, err := oras.Copy(ctx, repo, tag, fs, tag, oras.DefaultCopyOptions); err != nil {
 			return fmt.Errorf("failed to pull artifact: %w", err)
 		}
@@ -80,4 +93,5 @@ var pullCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(pullCmd)
 	pullCmd.Flags().StringVarP(&pullFile, "file", "f", "", "Destination Makefile (default: Makefile or makefile)")
+	pullCmd.Flags().BoolVar(&pullInsecure, "insecure", false, "Allow plain HTTP for registry")
 }
