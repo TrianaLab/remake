@@ -92,7 +92,7 @@ func TestTemplateCmd_OpenError(t *testing.T) {
 	}
 }
 
-func captureStdout(f func()) (string, error) {
+func captureTemplateStdout(f func()) (string, error) {
 	// keep copy of real stdout
 	old := os.Stdout
 	r, w, err := os.Pipe()
@@ -139,7 +139,7 @@ func TestTemplateCmd_Success(t *testing.T) {
 
 	// capture os.Stdout around Execute
 	rootCmd.SetArgs([]string{"template"})
-	output, err := captureStdout(func() {
+	output, err := captureTemplateStdout(func() {
 		if err := rootCmd.Execute(); err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
