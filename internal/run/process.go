@@ -64,7 +64,8 @@ func processFile(src string, visited map[string]bool, outpath string) error {
 					if err != nil {
 						return err
 					}
-					nestedOut := filepath.Join(".remake", "cache", filepath.Base(local)+".generated")
+					cacheDir := config.GetCacheDir()
+					nestedOut := filepath.Join(cacheDir, filepath.Base(local)+".generated")
 					if err := processFile(local, visited, nestedOut); err != nil {
 						return err
 					}
@@ -88,7 +89,8 @@ func processFile(src string, visited map[string]bool, outpath string) error {
 				if err != nil {
 					return err
 				}
-				nestedOut := filepath.Join(".remake", "cache", filepath.Base(local)+".generated")
+				cacheDir := config.GetCacheDir()
+				nestedOut := filepath.Join(cacheDir, filepath.Base(local)+".generated")
 				if err := processFile(local, visited, nestedOut); err != nil {
 					return err
 				}
