@@ -34,7 +34,7 @@ func TestProcessFile_IndentAndPlain(t *testing.T) {
 	}
 	got, _ := os.ReadFile(out)
 	if !strings.Contains(string(got), "\tline1") || !strings.Contains(string(got), "plain\n") {
-		t.Errorf("salida inesperada: %s", got)
+		t.Errorf("unexpected output: %s", got)
 	}
 }
 
@@ -51,7 +51,7 @@ func TestProcessFile_IncludeBlock(t *testing.T) {
 	}
 	got, _ := os.ReadFile(out)
 	if !bytes.Contains(got, []byte("A\n")) || !bytes.Contains(got, []byte("B\n")) {
-		t.Errorf("include no inyectado: %s", got)
+		t.Errorf("include not injected: %s", got)
 	}
 }
 
@@ -64,7 +64,7 @@ func TestProcessFile_Cyclic(t *testing.T) {
 
 	err := processFile(a, map[string]bool{}, filepath.Join(tmp, "o"))
 	if err == nil || !strings.Contains(err.Error(), "cyclic include") {
-		t.Errorf("se esperaba cyclic include, got %v", err)
+		t.Errorf("expected cyclic include, got %v", err)
 	}
 }
 
@@ -83,6 +83,35 @@ func TestRender(t *testing.T) {
 	}
 	got, _ := os.ReadFile(out)
 	if string(got) != "Z\n" {
-		t.Errorf("Render contenido = %q", got)
+		t.Errorf("Render = %q", got)
+	}
+}
+
+func TestRun_Success(t *testing.T) {
+	cwd := t.TempDir()
+	if err := os.Chdir(cwd); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile("Makefile", []byte("all:\n\techo OK\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Run([]string{"all"}, "Makefile"); err != nil {
+		t.Errorf("Run() success failed: %v", err)
+	}
+}
+
+func TestRun_FileNotFound(t *testing.T) {
+	err := Run([]string{"all"}, "no_exists.mk")
+	if err == nil || !strings.Contains(err.Error(), "read no_exists.mk") {
+		t.Errorf("expected read error, got %v", err)
+	}
+}
+
+func TestInlineFile_Error(t *testing.T) {
+	var buf bytes.Buffer
+	err := inlineFile(&buf, "no_exists")
+	if err == nil || !strings.HasPrefix(err.Error(), "inline read no_exists") {
+		t.Errorf("expected read error, got %v", err)
 	}
 }

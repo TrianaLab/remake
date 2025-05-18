@@ -102,3 +102,43 @@ func TestLoginCmd_PingFail(t *testing.T) {
 		t.Errorf("loginCmd ping fail = %v; want login failed", err)
 	}
 }
+
+func TestRunCmd_SuccessLocal(t *testing.T) {
+	work := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	if err := os.Chdir(work); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile("Makefile", []byte("all:\n\t@echo done\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	runFile = ""
+	runNoCache = false
+	if err := runCmd.RunE(runCmd, []string{"all"}); err != nil {
+		t.Errorf("runCmd.RunE() success = %v; want nil", err)
+	}
+}
+
+func TestPushCmd_NoArgs(t *testing.T) {
+	if err := pushCmd.RunE(pushCmd, []string{}); err == nil {
+		t.Error("pushCmd without args should fail, err = nil")
+	}
+}
+
+func TestPushCmd_InvalidRef(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	pushFile = "Makefile"
+	err := pushCmd.RunE(pushCmd, []string{"noSlash"})
+	if err == nil || !strings.Contains(err.Error(), "invalid reference") {
+		t.Errorf("expected 'invalid reference', got %v", err)
+	}
+}
+
+func TestPullCmd_InvalidRef(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	err := pullCmd.RunE(pullCmd, []string{"solo_un_elemento"})
+	if err == nil || !strings.Contains(err.Error(), "invalid reference") {
+		t.Errorf("expected 'invalid reference', got %v", err)
+	}
+}

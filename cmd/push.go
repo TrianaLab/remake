@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/TrianaLab/remake/config"
@@ -21,29 +23,36 @@ var pushFile string
 var pushCmd = &cobra.Command{
 	Use:   "push <remote_ref>",
 	Short: "Push a Makefile as an OCI artifact",
-	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) != 1 {
+			return fmt.Errorf("argument <remote_ref> is required")
+		}
+
 		if err := config.InitConfig(); err != nil {
 			return err
 		}
-		raw := args[0]
-		hasOCI := strings.HasPrefix(raw, "oci://")
-		ref := raw
-		if hasOCI {
-			ref = strings.TrimPrefix(raw, "oci://")
+
+		rawRef := args[0]
+		refForValidation := strings.TrimPrefix(rawRef, "oci://")
+		if !regexp.MustCompile(`^[^/]+/[^/]+`).MatchString(refForValidation) {
+			return fmt.Errorf("invalid reference: %s", rawRef)
 		}
-		name := ref[strings.LastIndex(ref, "/")+1:]
-		if !strings.Contains(name, ":") {
+
+		ref := refForValidation
+		if !strings.Contains(ref, ":") {
 			ref += ":latest"
 		}
-		if !hasOCI {
+		if !strings.HasPrefix(rawRef, "oci://") {
 			ref = viper.GetString("default_registry") + "/" + ref
 		}
 		fullRef := "oci://" + ref
+
 		parts := strings.SplitN(ref, "/", 2)
-		host, repoAndTag := parts[0], parts[1]
+		host := parts[0]
+		repoAndTag := parts[1]
 		rt := strings.SplitN(repoAndTag, ":", 2)
 		repoPath, tag := rt[0], rt[1]
+
 		filePath := pushFile
 		if filePath == "" {
 			filePath = config.GetDefaultMakefile()
@@ -51,7 +60,8 @@ var pushCmd = &cobra.Command{
 		if filePath == "" {
 			return fmt.Errorf("no Makefile found; specify with --file flag")
 		}
-		ctx := cmd.Context()
+
+		ctx := context.Background()
 		fs, err := file.New(filepath.Dir(filePath))
 		if err != nil {
 			return err
@@ -61,6 +71,7 @@ var pushCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+
 		manifestDesc, err := oras.PackManifest(ctx, fs, oras.PackManifestVersion1_1,
 			"application/x-makefile", oras.PackManifestOptions{Layers: []v1.Descriptor{desc}})
 		if err != nil {
@@ -69,24 +80,24 @@ var pushCmd = &cobra.Command{
 		if err := fs.Tag(ctx, manifestDesc, tag); err != nil {
 			return err
 		}
+
 		repoRef := host + "/" + repoPath
 		repo, err := remote.NewRepository(repoRef)
 		if err != nil {
 			return err
 		}
-		username := viper.GetString(fmt.Sprintf("registries.%s.username", host))
-		password := viper.GetString(fmt.Sprintf("registries.%s.password", host))
 		repo.Client = &auth.Client{
 			Client: retry.DefaultClient,
 			Cache:  auth.NewCache(),
 			Credential: auth.StaticCredential(host, auth.Credential{
-				Username: username,
-				Password: password,
+				Username: viper.GetString(fmt.Sprintf("registries.%s.username", host)),
+				Password: viper.GetString(fmt.Sprintf("registries.%s.password", host)),
 			}),
 		}
 		if _, err := oras.Copy(ctx, fs, tag, repo, tag, oras.DefaultCopyOptions); err != nil {
 			return fmt.Errorf("failed to push artifact: %w", err)
 		}
+
 		fmt.Printf("Pushed %s to %s\n", filePath, fullRef)
 		return nil
 	},
@@ -94,5 +105,5 @@ var pushCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(pushCmd)
-	pushCmd.Flags().StringVarP(&pushFile, "file", "f", "", "Makefile to push")
+	pushCmd.Flags().StringVarP(&pushFile, "file", "f", "", "Makefile to push (default: Makefile or makefile)")
 }

@@ -33,7 +33,12 @@ func InitConfig() error {
 }
 
 func SaveConfig() error {
-	if err := viper.WriteConfig(); err != nil {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("cannot find home directory: %w", err)
+	}
+	configFile := filepath.Join(home, ".remake", "config.yaml")
+	if err := viper.WriteConfigAs(configFile); err != nil {
 		return fmt.Errorf("error writing config file: %w", err)
 	}
 	return nil

@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -49,7 +50,7 @@ func TestFetchHTTP_Caching(t *testing.T) {
 	}
 	data, _ := os.ReadFile(first)
 	if string(data) != "hola" {
-		t.Errorf("contenido = %q; want %q", data, "hola")
+		t.Errorf("content = %q; want %q", data, "hola")
 	}
 
 	second, err := FetchHTTP(url)
@@ -57,7 +58,7 @@ func TestFetchHTTP_Caching(t *testing.T) {
 		t.Fatalf("FetchHTTP(cache) error = %v", err)
 	}
 	if first != second {
-		t.Errorf("ruta cache cambió: %q vs %q", first, second)
+		t.Errorf("cache path changed: %q vs %q", first, second)
 	}
 }
 
@@ -89,5 +90,27 @@ func TestFetchMakefile_LocalAndOCI(t *testing.T) {
 	}
 	if got2 != f {
 		t.Errorf("FetchMakefile(oci) = %q; want %q", got2, f)
+	}
+}
+
+func TestFetchHTTP_ErrorStatus(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	_, err := FetchHTTP(srv.URL + "/f")
+	if err == nil || !strings.Contains(err.Error(), "HTTP error 404") {
+		t.Errorf("expected HTTP error 404, got %v", err)
+	}
+}
+
+func TestFetchMakefile_Invalid(t *testing.T) {
+	_, err := FetchMakefile("file_no_exists")
+	if err == nil {
+		t.Error("expected error invalid reference, but err = nil")
 	}
 }

@@ -1,9 +1,9 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
-	"os"
-	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/TrianaLab/remake/config"
@@ -16,94 +16,68 @@ import (
 	"oras.land/oras-go/v2/registry/remote/retry"
 )
 
-var pullOutput string
-var pullNoCache bool
+var pullFile string
 
 var pullCmd = &cobra.Command{
 	Use:   "pull <remote_ref>",
-	Short: "Pull a Makefile into cache (OCI, HTTP or local)",
+	Short: "Pull a Makefile OCI artifact",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := config.InitConfig(); err != nil {
 			return err
 		}
-		cacheDir := config.GetCacheDir()
-		if pullNoCache {
-			os.RemoveAll(cacheDir)
+
+		rawRef := args[0]
+		refForValidation := rawRef
+		if strings.HasPrefix(rawRef, "oci://") {
+			refForValidation = strings.TrimPrefix(rawRef, "oci://")
+		}
+		if !regexp.MustCompile(`^[^/]+/[^/]+`).MatchString(refForValidation) {
+			return fmt.Errorf("invalid reference: %s", rawRef)
 		}
 
-		raw := args[0]
-		hasOCI := strings.HasPrefix(raw, "oci://")
-		ref := raw
-		if hasOCI {
-			ref = strings.TrimPrefix(raw, "oci://")
-		}
-		name := ref[strings.LastIndex(ref, "/")+1:]
-		if !strings.Contains(name, ":") {
+		ref := strings.TrimPrefix(rawRef, "oci://")
+		if !strings.Contains(ref, ":") {
 			ref += ":latest"
-			name += ":latest"
 		}
-		fileName := strings.SplitN(name, ":", 2)[0]
-		if !hasOCI {
+		if !strings.HasPrefix(rawRef, "oci://") {
 			ref = viper.GetString("default_registry") + "/" + ref
 		}
 
-		parts := strings.SplitN(ref, "/", 2)
-		host, repoAndTag := parts[0], parts[1]
-		rt := strings.SplitN(repoAndTag, ":", 2)
-		repoPath, tag := rt[0], rt[1]
-
-		dir := filepath.Join(cacheDir, repoPath, tag)
-
-		localPath := filepath.Join(dir, fileName)
-		if !pullNoCache {
-			if _, err := os.Stat(localPath); err == nil {
-				if pullOutput != "" {
-					return os.Rename(localPath, pullOutput)
-				}
-				fmt.Println(localPath)
-				return nil
-			}
-		}
-
-		repoRef := host + "/" + repoPath
-		repo, err := remote.NewRepository(repoRef)
-		if err != nil {
-			return err
-		}
-		username := viper.GetString(fmt.Sprintf("registries.%s.username", host))
-		password := viper.GetString(fmt.Sprintf("registries.%s.password", host))
-		repo.Client = &auth.Client{
-			Client: retry.DefaultClient,
-			Cache:  auth.NewCache(),
-			Credential: auth.StaticCredential(host, auth.Credential{
-				Username: username,
-				Password: password,
-			}),
-		}
-
-		fs, err := file.New(dir)
+		ctx := context.Background()
+		fs, err := file.New(".")
 		if err != nil {
 			return err
 		}
 		defer fs.Close()
-		ctx := cmd.Context()
-		_, err = oras.Copy(ctx, repo, tag, fs, tag, oras.DefaultCopyOptions)
+
+		parts := strings.SplitN(ref, "/", 2)
+		host := parts[0]
+		repoName := strings.SplitN(parts[1], ":", 2)[0]
+		repoRef := host + "/" + repoName
+		repo, err := remote.NewRepository(repoRef)
 		if err != nil {
+			return err
+		}
+		repo.Client = &auth.Client{
+			Client: retry.DefaultClient,
+			Cache:  auth.NewCache(),
+			Credential: auth.StaticCredential(host, auth.Credential{
+				Username: viper.GetString(fmt.Sprintf("registries.%s.username", host)),
+				Password: viper.GetString(fmt.Sprintf("registries.%s.password", host)),
+			}),
+		}
+
+		tag := strings.SplitN(ref, ":", 2)[1]
+		if _, err := oras.Copy(ctx, repo, tag, fs, tag, oras.DefaultCopyOptions); err != nil {
 			return fmt.Errorf("failed to pull artifact: %w", err)
 		}
 
-		localPath = filepath.Join(dir, fileName)
-		if pullOutput != "" {
-			return os.Rename(localPath, pullOutput)
-		}
-		fmt.Println(localPath)
 		return nil
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(pullCmd)
-	pullCmd.Flags().StringVarP(&pullOutput, "output", "o", "", "Output file path")
-	pullCmd.Flags().BoolVar(&pullNoCache, "no-cache", false, "Skip cache")
+	pullCmd.Flags().StringVarP(&pullFile, "file", "f", "", "Destination Makefile (default: Makefile or makefile)")
 }

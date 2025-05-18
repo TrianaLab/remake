@@ -1,9 +1,12 @@
 package config
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/spf13/viper"
 )
 
 func TestInitConfigAndCacheDirAndRegistry(t *testing.T) {
@@ -16,7 +19,7 @@ func TestInitConfigAndCacheDirAndRegistry(t *testing.T) {
 
 	cfg := filepath.Join(tempHome, ".remake", "config.yaml")
 	if _, err := os.Stat(cfg); err != nil {
-		t.Errorf("se esperaba config.yaml en %s, pero err = %v", cfg, err)
+		t.Errorf("expected config.yaml in %s, but err = %v", cfg, err)
 	}
 
 	if got := GetDefaultRegistry(); got != "ghcr.io" {
@@ -36,13 +39,35 @@ func TestGetDefaultMakefile(t *testing.T) {
 	}
 
 	if got := GetDefaultMakefile(); got != "" {
-		t.Errorf("sin ficheros, GetDefaultMakefile() = %q; want \"\"", got)
+		t.Errorf("no files, GetDefaultMakefile() = %q; want \"\"", got)
 	}
 
 	if err := os.WriteFile("makefile", []byte{}, 0644); err != nil {
 		t.Fatal(err)
 	}
 	if got := GetDefaultMakefile(); got != "makefile" {
-		t.Errorf("con makefile, GetDefaultMakefile() = %q; want %q", got, "makefile")
+		t.Errorf("with makefile, GetDefaultMakefile() = %q; want %q", got, "makefile")
+	}
+}
+
+func TestSaveConfig(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	if err := InitConfig(); err != nil {
+		t.Fatal(err)
+	}
+	viper.Set("default_registry", "example.com")
+
+	if err := SaveConfig(); err != nil {
+		t.Fatalf("SaveConfig() error = %v", err)
+	}
+	cfgPath := filepath.Join(tempHome, ".remake", "config.yaml")
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("couldn't read %s: %v", cfgPath, err)
+	}
+	if !bytes.Contains(data, []byte("default_registry: example.com")) {
+		t.Errorf("config.yaml doesn't contain modified default_registry; content=\n%s", data)
 	}
 }
