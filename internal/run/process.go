@@ -10,23 +10,20 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/TrianaLab/remake/config"
 	"github.com/TrianaLab/remake/internal/util"
 )
 
-var (
-	includeBlockRe = regexp.MustCompile(`^\s*include:\s*$`)
-	listItemRe     = regexp.MustCompile(`^\s*-\s*(.+)$`)
-	includeRe      = regexp.MustCompile(`^\s*include\s+(.+)$`)
-)
-
-// Run resolves includes recursively, inlines all referenced Makefiles, writes combined Makefile, and executes make
-type RunFunc func(targets []string, file string) error
+var includeBlockRe = regexp.MustCompile(`^\s*include:\s*$`)
+var listItemRe = regexp.MustCompile(`^\s*-\s*(.+)$`)
+var includeRe = regexp.MustCompile(`^\s*include\s+(.+)$`)
 
 func Run(targets []string, file string) error {
-	if err := os.MkdirAll(".remake", 0755); err != nil {
+	cacheDir := config.GetCacheDir()
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		return err
 	}
-	out := filepath.Join(".remake", "Makefile.generated")
+	out := filepath.Join(cacheDir, "Makefile.generated")
 	visited := make(map[string]bool)
 	if err := processFile(file, visited, out); err != nil {
 		return err
@@ -38,13 +35,11 @@ func Run(targets []string, file string) error {
 	return cmd.Run()
 }
 
-// processFile reads src, inlines includes, and writes result to outpath without any include directives
 func processFile(src string, visited map[string]bool, outpath string) error {
 	data, err := os.ReadFile(src)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", src, err)
 	}
-
 	if err := os.MkdirAll(filepath.Dir(outpath), 0755); err != nil {
 		return err
 	}
@@ -53,14 +48,10 @@ func processFile(src string, visited map[string]bool, outpath string) error {
 		return err
 	}
 	defer f.Close()
-
 	scanner := bufio.NewScanner(strings.NewReader(string(data)))
 	for scanner.Scan() {
 		line := scanner.Text()
-
-		// YAML-style block include
 		if includeBlockRe.MatchString(line) {
-			// process each list item
 			for scanner.Scan() {
 				next := scanner.Text()
 				if m := listItemRe.FindStringSubmatch(next); m != nil {
@@ -69,7 +60,6 @@ func processFile(src string, visited map[string]bool, outpath string) error {
 						return fmt.Errorf("cyclic include: %s", ref)
 					}
 					visited[ref] = true
-					// fetch and process nested Makefile
 					local, err := util.FetchMakefile(ref)
 					if err != nil {
 						return err
@@ -78,19 +68,15 @@ func processFile(src string, visited map[string]bool, outpath string) error {
 					if err := processFile(local, visited, nestedOut); err != nil {
 						return err
 					}
-					// inline content
 					if err := inlineFile(f, nestedOut); err != nil {
 						return err
 					}
 				} else {
-					// end of block, process this line normally
 					line = next
 					break
 				}
 			}
 		}
-
-		// single-line include
 		if m := includeRe.FindStringSubmatch(line); m != nil {
 			refs := strings.Fields(m[1])
 			for _, ref := range refs {
@@ -110,10 +96,11 @@ func processFile(src string, visited map[string]bool, outpath string) error {
 					return err
 				}
 			}
-			continue // skip writing the include line
+			continue
 		}
-
-		// write normal line
+		if len(line) > 0 && line[0] == ' ' {
+			line = "\t" + strings.TrimLeft(line, " ")
+		}
 		if _, err := f.WriteString(line + "\n"); err != nil {
 			return err
 		}
@@ -121,7 +108,6 @@ func processFile(src string, visited map[string]bool, outpath string) error {
 	return scanner.Err()
 }
 
-// inlineFile reads the file at path and writes its content to w
 func inlineFile(w io.Writer, path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {

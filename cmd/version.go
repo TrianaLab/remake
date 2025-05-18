@@ -6,14 +6,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version string = "dev"
+var version = "dev"
 
-// versionCmd prints the current version of the CLI
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version of remake",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("remake version %s", version)
+		fmt.Printf("remake version %s\n", version)
 	},
 }
 

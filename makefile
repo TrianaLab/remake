@@ -1,3 +1,6 @@
+include:
+- oci://ghcr.io/edu-diaz/ci.mk:sad
+
 GOBIN ?= $(shell go env GOBIN)
 ifeq ($(GOBIN),)
     GOBIN := $(shell go env GOPATH)/bin
