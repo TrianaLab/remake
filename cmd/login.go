@@ -17,6 +17,7 @@ import (
 )
 
 var (
+	loginInsecure bool
 	loginUsername string
 	loginPassword string
 )
@@ -60,6 +61,11 @@ var loginCmd = &cobra.Command{
 
 		ctx := context.Background()
 		reg, err := remote.NewRegistry(endpoint)
+
+		if loginInsecure {
+			reg.PlainHTTP = true
+		}
+
 		if err != nil {
 			return fmt.Errorf("invalid registry %s: %w", endpoint, err)
 		}
@@ -89,6 +95,7 @@ func init() {
 	rootCmd.AddCommand(loginCmd)
 	loginCmd.Flags().StringVarP(&loginUsername, "username", "u", "", "Registry username")
 	loginCmd.Flags().StringVarP(&loginPassword, "password", "p", "", "Registry password")
+	loginCmd.Flags().BoolVar(&loginInsecure, "insecure", false, "Allow insecure HTTP registry (plain HTTP)")
 
 	_ = viper.BindPFlag("username", loginCmd.Flags().Lookup("username"))
 	_ = viper.BindPFlag("password", loginCmd.Flags().Lookup("password"))

@@ -3,6 +3,7 @@ module github.com/TrianaLab/remake
 go 1.23.5
 
 require (
+	github.com/google/go-containerregistry v0.20.3
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.20.1
