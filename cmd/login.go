@@ -17,14 +17,14 @@ import (
 )
 
 var (
-	loginInsecure  bool
-	loginUsername  string
-	loginPassword  string
-	initConfig     = config.InitConfig
-	newRegistry    = remote.NewRegistry
-	saveConfig     = config.SaveConfig
-	passwordReader = term.ReadPassword
-	inputReader    = func() *bufio.Reader { return bufio.NewReader(os.Stdin) }
+	loginInsecure   bool
+	loginUsername   string
+	loginPassword   string
+	loginInitConfig = config.InitConfig
+	newRegistry     = remote.NewRegistry
+	saveConfig      = config.SaveConfig
+	passwordReader  = term.ReadPassword
+	inputReader     = func() *bufio.Reader { return bufio.NewReader(os.Stdin) }
 )
 
 var loginCmd = &cobra.Command{
@@ -32,7 +32,7 @@ var loginCmd = &cobra.Command{
 	Short: "Authenticate to an OCI registry and save credentials",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := initConfig(); err != nil {
+		if err := loginInitConfig(); err != nil {
 			return err
 		}
 

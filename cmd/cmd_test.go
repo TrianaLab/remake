@@ -88,7 +88,7 @@ func TestPushCmd_NoFile(t *testing.T) {
 
 func TestPullCmd_ArgsValidation(t *testing.T) {
 	if err := pullCmd.Args(pullCmd, []string{}); err == nil {
-		t.Error("pullCmd.Args() con 0 args debía fallar")
+		t.Error("pullCmd.Args() with 0 should fail")
 	}
 }
 
@@ -503,8 +503,17 @@ func TestRunCmd_FileFlag(t *testing.T) {
 	}
 }
 
-func TestLoginCmd_InitConfigError(t *testing.T) {
-	initConfig = func() error { return errors.New("init err") }
+func TestPullCmd_InitConfigError(t *testing.T) {
+	pullInitConfig = func() error { return errors.New("init err") }
+	err := pullCmd.RunE(pullCmd, []string{"example.com/myrepo:latest"})
+
+	if err == nil || !strings.Contains(err.Error(), "init err") {
+		t.Fatalf("expected init err, got %v", err)
+	}
+}
+
+func TestLoginCmd_loginInitConfigError(t *testing.T) {
+	loginInitConfig = func() error { return errors.New("init err") }
 	err := loginCmd.RunE(loginCmd, []string{})
 	if err == nil || !strings.Contains(err.Error(), "init err") {
 		t.Fatalf("expected init err, got %v", err)
@@ -512,7 +521,7 @@ func TestLoginCmd_InitConfigError(t *testing.T) {
 }
 
 func TestLoginCmd_InvalidRegistryError(t *testing.T) {
-	initConfig = func() error { return nil }
+	loginInitConfig = func() error { return nil }
 	newRegistry = func(endpoint string) (*remote.Registry, error) {
 		return nil, errors.New("bad registry")
 	}
@@ -526,7 +535,7 @@ func TestLoginCmd_PasswordReadError(t *testing.T) {
 	loginUsername = "user"
 	loginPassword = ""
 	loginInsecure = true
-	initConfig = func() error { return nil }
+	loginInitConfig = func() error { return nil }
 	saveConfig = func() error { return nil }
 	newRegistry = remote.NewRegistry
 	passwordReader = func(fd int) ([]byte, error) {
@@ -539,7 +548,7 @@ func TestLoginCmd_PasswordReadError(t *testing.T) {
 }
 
 func TestLoginCmd_SaveConfigError(t *testing.T) {
-	initConfig = func() error { return nil }
+	loginInitConfig = func() error { return nil }
 	inputReader = func() *bufio.Reader {
 		return bufio.NewReader(strings.NewReader("user\n"))
 	}
@@ -558,7 +567,7 @@ func TestLoginCmd_SaveConfigError(t *testing.T) {
 }
 
 func TestLoginCmd_SuccessInteractive(t *testing.T) {
-	initConfig = func() error { return nil }
+	loginInitConfig = func() error { return nil }
 	saveConfig = func() error { return nil }
 	inputReader = func() *bufio.Reader {
 		return bufio.NewReader(strings.NewReader("user\n"))
@@ -590,7 +599,7 @@ func TestLoginCmd_SuccessInteractive(t *testing.T) {
 func TestLoginCmd_UsernameReadSuccess(t *testing.T) {
 	loginUsername = ""
 	loginPassword = ""
-	initConfig = func() error { return nil }
+	loginInitConfig = func() error { return nil }
 	saveConfig = func() error { return nil }
 	inputReader = func() *bufio.Reader {
 		return bufio.NewReader(strings.NewReader("alice_user\n"))
@@ -640,7 +649,7 @@ func (errReader) Read(p []byte) (int, error) {
 func TestLoginCmd_UsernameReadError(t *testing.T) {
 	loginUsername = ""
 	loginPassword = ""
-	initConfig = func() error { return nil }
+	loginInitConfig = func() error { return nil }
 	saveConfig = func() error { return nil }
 	inputReader = func() *bufio.Reader {
 		errR := &errReader{}
