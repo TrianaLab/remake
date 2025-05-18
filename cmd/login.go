@@ -18,14 +18,13 @@ import (
 )
 
 var (
-	loginInsecure   bool
-	loginUsername   string
-	loginPassword   string
-	loginInitConfig = config.InitConfig
-	newRegistry     = remote.NewRegistry
-	saveConfig      = config.SaveConfig
-	passwordReader  = term.ReadPassword
-	inputReader     = func() *bufio.Reader { return bufio.NewReader(os.Stdin) }
+	loginInsecure  bool
+	loginUsername  string
+	loginPassword  string
+	newRegistry    = remote.NewRegistry
+	saveConfig     = config.SaveConfig
+	passwordReader = term.ReadPassword
+	inputReader    = func() *bufio.Reader { return bufio.NewReader(os.Stdin) }
 )
 
 // loginCmd authenticates to an OCI registry and saves credentials under a normalized key.
