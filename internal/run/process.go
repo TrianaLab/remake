@@ -35,6 +35,18 @@ func Run(targets []string, file string) error {
 	return cmd.Run()
 }
 
+func Render(src, outpath string) (string, error) {
+	cacheDir := config.GetCacheDir()
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		return "", err
+	}
+	visited := make(map[string]bool)
+	if err := processFile(src, visited, outpath); err != nil {
+		return "", err
+	}
+	return outpath, nil
+}
+
 func processFile(src string, visited map[string]bool, outpath string) error {
 	data, err := os.ReadFile(src)
 	if err != nil {

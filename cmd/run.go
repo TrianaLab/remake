@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -50,7 +51,11 @@ var runCmd = &cobra.Command{
 		}
 
 		// execute make with generated file
-		return run.Run(args, file)
+		cacheDir := config.GetCacheDir()
+		gen := filepath.Join(cacheDir, "Makefile.generated")
+		err := run.Run(args, file)
+		_ = os.Remove(gen)
+		return err
 	},
 }
 
