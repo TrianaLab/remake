@@ -361,3 +361,141 @@ func TestRunCmd_RemoteFetch(t *testing.T) {
 		t.Errorf("got %q, want output R", buf.String())
 	}
 }
+
+func TestRenderCmd_DefaultFile(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+	work := t.TempDir()
+	if err := os.Chdir(work); err != nil {
+		t.Fatal(err)
+	}
+	content := "HELLO\n"
+	if err := os.WriteFile("makefile", []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	renderFile = ""
+	renderNoCache = false
+
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	if err := renderCmd.RunE(renderCmd, []string{}); err != nil {
+		t.Fatalf("renderCmd default error = %v", err)
+	}
+	w.Close()
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	if buf.String() != content {
+		t.Errorf("renderCmd default = %q; want %q", buf.String(), content)
+	}
+}
+
+func TestRenderCmd_FetchError(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	renderFile = ts.URL + "/makefile"
+	renderNoCache = true
+
+	err := renderCmd.RunE(renderCmd, []string{})
+	if err == nil || !strings.Contains(err.Error(), "HTTP error 404") {
+		t.Errorf("expected HTTP error 404, got %v", err)
+	}
+}
+
+func TestPushCmd_Success_LocalRegistry(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+	reg := registry.New()
+	ts := httptest.NewServer(reg)
+	defer ts.Close()
+	host := strings.TrimPrefix(ts.URL, "http://")
+
+	dir := t.TempDir()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	content := "all:\n\techo OK\n"
+	if err := os.WriteFile("Makefile", []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	fsStore, err := file.New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fsStore.Close()
+	desc, err := fsStore.Add(ctx, "Makefile", "application/x-makefile", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestDesc, err := oras.PackManifest(ctx, fsStore, oras.PackManifestVersion1_1,
+		"application/x-makefile", oras.PackManifestOptions{Layers: []v1.Descriptor{desc}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fsStore.Tag(ctx, manifestDesc, "latest"); err != nil {
+		t.Fatal(err)
+	}
+
+	pushFile = "Makefile"
+	pushCmd.Flags().Set("insecure", "true")
+	err = pushCmd.RunE(pushCmd, []string{host + "/myrepo"})
+	if err != nil {
+		t.Fatalf("pushCmd success failed: %v", err)
+	}
+}
+
+func TestRunCmd_RemoteFetchError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	runFile = srv.URL + "/Makefile"
+	runCmd.Flags().Set("no-cache", "true")
+
+	err := runCmd.RunE(runCmd, []string{"all"})
+	if err == nil || !strings.Contains(err.Error(), "HTTP error 404") {
+		t.Errorf("expected HTTP error 404, got %v", err)
+	}
+}
+
+func TestRunCmd_FileFlag(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+	work := t.TempDir()
+	if err := os.Chdir(work); err != nil {
+		t.Fatal(err)
+	}
+	content := "all:\n\techo FLAG\n"
+	if err := os.WriteFile("custom.mk", []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	runFile = "custom.mk"
+	runCmd.Flags().Set("file", "custom.mk")
+
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	if err := runCmd.RunE(runCmd, []string{"all"}); err != nil {
+		t.Fatalf("runCmd file flag failed: %v", err)
+	}
+	w.Close()
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	if !strings.Contains(buf.String(), "FLAG") {
+		t.Errorf("runCmd file flag output = %q; want contains FLAG", buf.String())
+	}
+}

@@ -28,27 +28,32 @@ var pushCmd = &cobra.Command{
 	Short: "Push a Makefile as an OCI artifact",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-
 		if err := config.InitConfig(); err != nil {
 			return err
 		}
 
 		rawRef := args[0]
-		refForValidation := strings.TrimPrefix(rawRef, "oci://")
-		if !regexp.MustCompile(`^[^/]+/[^/]+`).MatchString(refForValidation) {
+		refStr := strings.TrimPrefix(rawRef, "oci://")
+		if !regexp.MustCompile(`^[^/]+/[^/]+`).MatchString(refStr) {
 			return fmt.Errorf("invalid reference: %s", rawRef)
 		}
 
-		ref := refForValidation
-		if !strings.Contains(ref, ":") {
-			ref += ":latest"
-		}
-		if !strings.HasPrefix(rawRef, "oci://") {
-			ref = viper.GetString("default_registry") + "/" + ref
-		}
-		fullRef := "oci://" + ref
+		parts0 := strings.SplitN(refStr, "/", 2)
+		hostPart := parts0[0]
+		pathPart := parts0[1]
 
-		parts := strings.SplitN(ref, "/", 2)
+		if !strings.Contains(pathPart, ":") {
+			pathPart += ":latest"
+		}
+
+		refWithoutOCI := hostPart + "/" + pathPart
+
+		if !strings.HasPrefix(rawRef, "oci://") && !pushInsecure {
+			refWithoutOCI = viper.GetString("default_registry") + "/" + refWithoutOCI
+		}
+		fullRef := "oci://" + refWithoutOCI
+
+		parts := strings.SplitN(refWithoutOCI, "/", 2)
 		host := parts[0]
 		repoAndTag := parts[1]
 		rt := strings.SplitN(repoAndTag, ":", 2)
@@ -87,11 +92,9 @@ var pushCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-
-		if pushInsecure {
+		if pushInsecure || strings.Contains(host, ":") {
 			repo.PlainHTTP = true
 		}
-
 		repo.Client = &auth.Client{
 			Client: retry.DefaultClient,
 			Cache:  auth.NewCache(),
