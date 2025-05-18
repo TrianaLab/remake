@@ -14,13 +14,13 @@ import (
 func restoreRunStubs(origFile string, origNoCache bool, origDefault func() string, origRun func(string, []string, bool) error) {
 	runFile = origFile
 	runNoCache = origNoCache
-	defaultMakefileFn = origDefault
+	runDefaultMakefileFn = origDefault
 	runFn = origRun
 }
 
 func TestRunCmd_WithFileFlag(t *testing.T) {
 	origFile, origNoCache := runFile, runNoCache
-	origDef, origRun := defaultMakefileFn, runFn
+	origDef, origRun := runDefaultMakefileFn, runFn
 	defer restoreRunStubs(origFile, origNoCache, origDef, origRun)
 
 	called := false
@@ -56,11 +56,11 @@ func TestRunCmd_WithFileFlag(t *testing.T) {
 
 func TestRunCmd_DefaultFileMissing(t *testing.T) {
 	origFile, origNoCache := runFile, runNoCache
-	origDef, origRun := defaultMakefileFn, runFn
+	origDef, origRun := runDefaultMakefileFn, runFn
 	defer restoreRunStubs(origFile, origNoCache, origDef, origRun)
 
 	runFile = ""
-	defaultMakefileFn = func() string { return "" }
+	runDefaultMakefileFn = func() string { return "" }
 	runNoCache = false
 
 	rootCmd.SetArgs([]string{"run", "build"})
@@ -72,7 +72,7 @@ func TestRunCmd_DefaultFileMissing(t *testing.T) {
 
 func TestRunCmd_DefaultFileThenErrorAndSuccess(t *testing.T) {
 	origFile, origNoCache := runFile, runNoCache
-	origDef, origRun := defaultMakefileFn, runFn
+	origDef, origRun := runDefaultMakefileFn, runFn
 	defer restoreRunStubs(origFile, origNoCache, origDef, origRun)
 
 	dir := t.TempDir()
@@ -81,7 +81,7 @@ func TestRunCmd_DefaultFileThenErrorAndSuccess(t *testing.T) {
 	if err := os.WriteFile(name, []byte("all:\n\techo hi\n"), 0644); err != nil {
 		t.Fatalf("write Makefile: %v", err)
 	}
-	defaultMakefileFn = func() string { return name }
+	runDefaultMakefileFn = func() string { return name }
 
 	// success
 	called := false

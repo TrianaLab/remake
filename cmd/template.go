@@ -12,8 +12,11 @@ import (
 )
 
 var (
-	templateFile    string
-	templateNoCache bool
+	templateFile              string
+	templateNoCache           bool
+	templateDefaultMakefileFn = config.GetDefaultMakefile
+	cacheDirFn                = config.GetCacheDir
+	renderFn                  = run.Render
 )
 
 // templateCmd prints the fully-resolved Makefile without executing it.
@@ -25,14 +28,14 @@ var templateCmd = &cobra.Command{
 		// file to render
 		file := templateFile
 		if file == "" {
-			file = config.GetDefaultMakefile()
+			file = templateDefaultMakefileFn()
 			if file == "" {
 				return fmt.Errorf("no Makefile found; specify with -f flag")
 			}
 		}
 
 		// generate into cache
-		cacheDir := config.GetCacheDir()
+		cacheDir := cacheDirFn()
 		out := filepath.Join(cacheDir, "Makefile.generated")
 		// ensure cache dir
 		if err := os.MkdirAll(cacheDir, 0755); err != nil {
@@ -40,7 +43,7 @@ var templateCmd = &cobra.Command{
 		}
 
 		// render with includes resolved
-		if err := run.Render(file, out, !templateNoCache); err != nil {
+		if err := renderFn(file, out, !templateNoCache); err != nil {
 			return err
 		}
 
