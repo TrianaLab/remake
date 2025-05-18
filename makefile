@@ -19,17 +19,17 @@ test:
 	go test ./... -v
 
 coverage: test
-	@echo "Generando reporte de cobertura..."
+	@echo "Generating coverage report..."
 	go test ./... -coverprofile=coverage.out
-	@echo "Cobertura total: $$(go tool cover -func=coverage.out | grep total | awk '{print $$3}')"
-	@echo "Puedes ver el informe HTML con: go tool cover -html=coverage.out"
+	@echo "Coverage: $$(go tool cover -func=coverage.out | grep total | awk '{print $$3}')"
+	go tool cover -html=coverage.out
 
 lint:
-	@echo "Formateando código..."
+	@echo "Formatting code..."
 	go fmt ./...
-	@echo "Ejecutando go vet..."
+	@echo "Running go vet..."
 	go vet ./...
-	@echo "Ejecutando golangci-lint..."
+	@echo "Running golangci-lint..."
 	golangci-lint run
 
 clean:
