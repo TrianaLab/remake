@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -497,5 +500,89 @@ func TestRunCmd_FileFlag(t *testing.T) {
 	io.Copy(&buf, r)
 	if !strings.Contains(buf.String(), "FLAG") {
 		t.Errorf("runCmd file flag output = %q; want contains FLAG", buf.String())
+	}
+}
+
+func TestLoginCmd_InitConfigError(t *testing.T) {
+	initConfig = func() error { return errors.New("init err") }
+	err := loginCmd.RunE(loginCmd, []string{})
+	if err == nil || !strings.Contains(err.Error(), "init err") {
+		t.Fatalf("expected init err, got %v", err)
+	}
+}
+
+func TestLoginCmd_InvalidRegistryError(t *testing.T) {
+	initConfig = func() error { return nil }
+	newRegistry = func(endpoint string) (*remote.Registry, error) {
+		return nil, errors.New("bad registry")
+	}
+	err := loginCmd.RunE(loginCmd, []string{"foo"})
+	if err == nil || !strings.Contains(err.Error(), "invalid registry foo") {
+		t.Fatalf("expected invalid registry foo, got %v", err)
+	}
+}
+
+func TestLoginCmd_PasswordReadError(t *testing.T) {
+	loginUsername = "user"
+	loginPassword = ""
+	loginInsecure = true
+	initConfig = func() error { return nil }
+	saveConfig = func() error { return nil }
+	newRegistry = remote.NewRegistry
+	passwordReader = func(fd int) ([]byte, error) {
+		return nil, errors.New("pw error")
+	}
+	err := loginCmd.RunE(loginCmd, []string{"example.com"})
+	if err == nil || !strings.Contains(err.Error(), "pw error") {
+		t.Fatalf("expected pw error, got %v", err)
+	}
+}
+
+func TestLoginCmd_SaveConfigError(t *testing.T) {
+	initConfig = func() error { return nil }
+	inputReader = func() *bufio.Reader {
+		return bufio.NewReader(strings.NewReader("user\n"))
+	}
+	passwordReader = func(fd int) ([]byte, error) {
+		return []byte("pass"), nil
+	}
+	rServer := httptest.NewServer(registry.New())
+	defer rServer.Close()
+	endpoint := strings.TrimPrefix(rServer.URL, "http://")
+	newRegistry = remote.NewRegistry
+	saveConfig = func() error { return errors.New("save err") }
+	err := loginCmd.RunE(loginCmd, []string{endpoint})
+	if err == nil || !strings.Contains(err.Error(), "save err") {
+		t.Fatalf("expected save err, got %v", err)
+	}
+}
+
+func TestLoginCmd_SuccessInteractive(t *testing.T) {
+	initConfig = func() error { return nil }
+	saveConfig = func() error { return nil }
+	inputReader = func() *bufio.Reader {
+		return bufio.NewReader(strings.NewReader("user\n"))
+	}
+	passwordReader = func(fd int) ([]byte, error) {
+		return []byte("pass"), nil
+	}
+	rServer := httptest.NewServer(registry.New())
+	defer rServer.Close()
+	endpoint := strings.TrimPrefix(rServer.URL, "http://")
+	newRegistry = remote.NewRegistry
+	loginInsecure = true
+	old := os.Stdout
+	rPipe, wPipe, _ := os.Pipe()
+	os.Stdout = wPipe
+	err := loginCmd.RunE(loginCmd, []string{endpoint})
+	wPipe.Close()
+	os.Stdout = old
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	out, _ := io.ReadAll(rPipe)
+	want := fmt.Sprintf("Connected to %s successfully", endpoint)
+	if !strings.Contains(string(out), want) {
+		t.Errorf("unexpected output: %s", out)
 	}
 }

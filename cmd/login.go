@@ -17,9 +17,14 @@ import (
 )
 
 var (
-	loginInsecure bool
-	loginUsername string
-	loginPassword string
+	loginInsecure  bool
+	loginUsername  string
+	loginPassword  string
+	initConfig     = config.InitConfig
+	newRegistry    = remote.NewRegistry
+	saveConfig     = config.SaveConfig
+	passwordReader = term.ReadPassword
+	inputReader    = func() *bufio.Reader { return bufio.NewReader(os.Stdin) }
 )
 
 var loginCmd = &cobra.Command{
@@ -27,7 +32,7 @@ var loginCmd = &cobra.Command{
 	Short: "Authenticate to an OCI registry and save credentials",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := config.InitConfig(); err != nil {
+		if err := initConfig(); err != nil {
 			return err
 		}
 
@@ -40,7 +45,7 @@ var loginCmd = &cobra.Command{
 			return fmt.Errorf("invalid registry %s", endpoint)
 		}
 
-		reader := bufio.NewReader(os.Stdin)
+		reader := inputReader()
 		if loginUsername == "" {
 			fmt.Print("Username: ")
 			u, err := reader.ReadString('\n')
@@ -49,9 +54,10 @@ var loginCmd = &cobra.Command{
 			}
 			loginUsername = strings.TrimSpace(u)
 		}
+
 		if loginPassword == "" {
 			fmt.Print("Password: ")
-			pw, err := term.ReadPassword(int(os.Stdin.Fd()))
+			pw, err := passwordReader(int(os.Stdin.Fd()))
 			fmt.Println()
 			if err != nil {
 				return err
@@ -59,15 +65,12 @@ var loginCmd = &cobra.Command{
 			loginPassword = string(pw)
 		}
 
-		ctx := context.Background()
-		reg, err := remote.NewRegistry(endpoint)
-
-		if loginInsecure {
-			reg.PlainHTTP = true
-		}
-
+		reg, err := newRegistry(endpoint)
 		if err != nil {
 			return fmt.Errorf("invalid registry %s: %w", endpoint, err)
+		}
+		if loginInsecure {
+			reg.PlainHTTP = true
 		}
 		reg.Client = &auth.Client{
 			Credential: auth.StaticCredential(endpoint, auth.Credential{
@@ -76,13 +79,14 @@ var loginCmd = &cobra.Command{
 			}),
 			Cache: auth.NewCache(),
 		}
-		if err := reg.Ping(ctx); err != nil {
+
+		if err := reg.Ping(context.Background()); err != nil {
 			return fmt.Errorf("login failed: %w", err)
 		}
 
 		viper.Set(fmt.Sprintf("registries.%s.username", endpoint), loginUsername)
 		viper.Set(fmt.Sprintf("registries.%s.password", endpoint), loginPassword)
-		if err := config.SaveConfig(); err != nil {
+		if err := saveConfig(); err != nil {
 			return err
 		}
 
@@ -96,7 +100,4 @@ func init() {
 	loginCmd.Flags().StringVarP(&loginUsername, "username", "u", "", "Registry username")
 	loginCmd.Flags().StringVarP(&loginPassword, "password", "p", "", "Registry password")
 	loginCmd.Flags().BoolVar(&loginInsecure, "insecure", false, "Allow insecure HTTP registry (plain HTTP)")
-
-	_ = viper.BindPFlag("username", loginCmd.Flags().Lookup("username"))
-	_ = viper.BindPFlag("password", loginCmd.Flags().Lookup("password"))
 }
