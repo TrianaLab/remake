@@ -5,13 +5,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
-
-	"github.com/spf13/cobra"
 
 	"github.com/TrianaLab/remake/config"
 	"github.com/TrianaLab/remake/internal/run"
 	"github.com/TrianaLab/remake/internal/util"
+	"github.com/spf13/cobra"
 )
 
 var runFile string
@@ -22,45 +20,43 @@ var runCmd = &cobra.Command{
 	Short: "Run make target with remote includes resolved",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// ensure make is available
 		if _, err := exec.LookPath("make"); err != nil {
 			return fmt.Errorf("make not found in PATH")
 		}
 
-		// load configuration and credentials
 		if err := config.InitConfig(); err != nil {
 			return err
 		}
 
-		// clear cache if requested
-		if runNoCache {
-			os.RemoveAll(config.GetCacheDir())
-		}
-
-		// determine Makefile path, fetching remote if needed
 		file := runFile
-		if strings.HasPrefix(file, "oci://") || strings.HasPrefix(file, "http://") || strings.HasPrefix(file, "https://") {
-			localPath, err := util.FetchMakefile(file)
-			if err != nil {
-				return err
-			}
-			file = localPath
-		}
+		var err error
+
 		if file == "" {
 			file = config.GetDefaultMakefile()
+		} else {
+			fetcher, err := util.GetFetcher(file)
+			if err == nil {
+				file, err = fetcher.Fetch(file, !runNoCache)
+				if err != nil {
+					return err
+				}
+			}
 		}
 
-		// execute make with generated file
-		cacheDir := config.GetCacheDir()
-		gen := filepath.Join(cacheDir, "Makefile.generated")
-		err := run.Run(args, file)
+		err = run.Run(args, file, !runNoCache) // Añadido parámetro useCache
+		if err != nil {
+			return err
+		}
+
+		gen := filepath.Join(config.GetCacheDir(), "Makefile.generated")
 		_ = os.Remove(gen)
-		return err
+
+		return nil
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(runCmd)
-	runCmd.Flags().StringVarP(&runFile, "file", "f", "", "Makefile to use")
+	runCmd.Flags().StringVarP(&runFile, "file", "f", "", "Makefile to use (can be local or remote)")
 	runCmd.Flags().BoolVar(&runNoCache, "no-cache", false, "Skip cache")
 }

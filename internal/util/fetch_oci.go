@@ -16,66 +16,77 @@ import (
 	"oras.land/oras-go/v2/registry/remote/retry"
 )
 
-func FetchOCI(ociRef string) (string, error) {
-	raw := strings.TrimPrefix(ociRef, "oci://")
-	if !strings.Contains(raw, ":") {
-		raw += ":latest"
-	}
-	parts := strings.SplitN(raw, "/", 2)
-	host, repoAndTag := parts[0], parts[1]
-	rt := strings.SplitN(repoAndTag, ":", 2)
-	repoPath, tag := rt[0], rt[1]
+// OCIFetcher retrieves OCI artifacts, honoring cache and optional credentials.
+type OCIFetcher struct{}
 
-	cacheRoot := config.GetCacheDir()
-	dir := filepath.Join(cacheRoot, repoPath, tag)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+func (o *OCIFetcher) Fetch(ref string, useCache bool) (string, error) {
+	// First, consult cache
+	cacheFetcher := &CacheFetcher{}
+	if path, err := cacheFetcher.Fetch(ref, useCache); err != nil {
 		return "", err
+	} else if path != "" {
+		return path, nil
 	}
 
-	entries, err := os.ReadDir(dir)
-	if err == nil {
-		for _, e := range entries {
-			if !e.IsDir() {
-				return filepath.Join(dir, e.Name()), nil
-			}
-		}
+	// Not cached or cache disabled: proceed remote
+	clean := strings.TrimPrefix(ref, "oci://")
+	parts := strings.SplitN(clean, "/", 2)
+	if len(parts) != 2 {
+		return "", fmt.Errorf("invalid OCI reference: %s", ref)
+	}
+	host, repoTag := parts[0], parts[1]
+
+	tag := "latest"
+	if idx := strings.LastIndex(repoTag, ":"); idx != -1 {
+		tag = repoTag[idx+1:]
+		repoTag = repoTag[:idx]
 	}
 
-	fs, err := file.New(dir)
+	cacheDir := filepath.Join(config.GetCacheDir(), host, repoTag, tag)
+	fs, err := file.New(cacheDir)
 	if err != nil {
 		return "", err
 	}
 	defer fs.Close()
 
-	repoRef := host + "/" + repoPath
+	repoRef := fmt.Sprintf("%s/%s", host, repoTag)
 	repo, err := remote.NewRepository(repoRef)
 	if err != nil {
 		return "", err
 	}
-	username := viper.GetString(fmt.Sprintf("registries.%s.username", host))
-	password := viper.GetString(fmt.Sprintf("registries.%s.password", host))
-	repo.Client = &auth.Client{
-		Client: retry.DefaultClient,
-		Cache:  auth.NewCache(),
-		Credential: auth.StaticCredential(host, auth.Credential{
-			Username: username,
-			Password: password,
-		}),
+
+	// Optionally set credentials if available
+	key := config.NormalizeKey(host)
+	username := viper.GetString(fmt.Sprintf("registries.%s.username", key))
+	password := viper.GetString(fmt.Sprintf("registries.%s.password", key))
+	if username != "" && password != "" {
+		repo.Client = &auth.Client{
+			Client: retry.DefaultClient,
+			Cache:  auth.NewCache(),
+			Credential: auth.StaticCredential(host, auth.Credential{
+				Username: username,
+				Password: password,
+			}),
+		}
+	} else {
+		repo.Client = &auth.Client{Client: retry.DefaultClient, Cache: auth.NewCache()}
 	}
 
 	ctx := context.Background()
 	if _, err := oras.Copy(ctx, repo, tag, fs, tag, oras.DefaultCopyOptions); err != nil {
-		return "", fmt.Errorf("failed to download OCI artifact: %w", err)
+		return "", fmt.Errorf("failed to fetch OCI artifact: %w", err)
 	}
 
-	entries, err = os.ReadDir(dir)
+	// Return first file in cache dir
+	entries, err := os.ReadDir(cacheDir)
 	if err != nil {
 		return "", err
 	}
 	for _, e := range entries {
 		if !e.IsDir() {
-			return filepath.Join(dir, e.Name()), nil
+			return filepath.Join(cacheDir, e.Name()), nil
 		}
 	}
-	return "", fmt.Errorf("no file found in OCI artifact: %s", ociRef)
+
+	return "", fmt.Errorf("no file found after fetching %s", ref)
 }

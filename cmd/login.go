@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -27,34 +28,31 @@ var (
 	inputReader     = func() *bufio.Reader { return bufio.NewReader(os.Stdin) }
 )
 
+// loginCmd authenticates to an OCI registry and saves credentials under a normalized key.
 var loginCmd = &cobra.Command{
-	Use:   "login [oci_endpoint]",
+	Use:   "login <oci_endpoint>",
 	Short: "Authenticate to an OCI registry and save credentials",
-	Args:  cobra.MaximumNArgs(1),
+	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Initialize configuration
 		if err := loginInitConfig(); err != nil {
 			return err
 		}
 
-		endpoint := viper.GetString("default_registry")
-		if len(args) == 1 {
-			endpoint = args[0]
-		}
-
+		endpoint := args[0]
 		if !regexp.MustCompile(`^[A-Za-z0-9\.\-]+(?::[0-9]+)?$`).MatchString(endpoint) {
 			return fmt.Errorf("invalid registry %s", endpoint)
 		}
 
-		reader := inputReader()
+		// Request credentials if missing
 		if loginUsername == "" {
 			fmt.Print("Username: ")
-			u, err := reader.ReadString('\n')
+			u, err := inputReader().ReadString('\n')
 			if err != nil {
 				return err
 			}
 			loginUsername = strings.TrimSpace(u)
 		}
-
 		if loginPassword == "" {
 			fmt.Print("Password: ")
 			pw, err := passwordReader(int(os.Stdin.Fd()))
@@ -65,27 +63,46 @@ var loginCmd = &cobra.Command{
 			loginPassword = string(pw)
 		}
 
-		reg, err := newRegistry(endpoint)
+		// Perform login
+		repo, err := newRegistry(endpoint)
 		if err != nil {
 			return fmt.Errorf("invalid registry %s: %w", endpoint, err)
 		}
 		if loginInsecure {
-			reg.PlainHTTP = true
+			repo.PlainHTTP = true
 		}
-		reg.Client = &auth.Client{
+		repo.Client = &auth.Client{
 			Credential: auth.StaticCredential(endpoint, auth.Credential{
 				Username: loginUsername,
 				Password: loginPassword,
 			}),
 			Cache: auth.NewCache(),
 		}
-
-		if err := reg.Ping(context.Background()); err != nil {
+		if err := repo.Ping(context.Background()); err != nil {
 			return fmt.Errorf("login failed: %w", err)
 		}
 
-		viper.Set(fmt.Sprintf("registries.%s.username", endpoint), loginUsername)
-		viper.Set(fmt.Sprintf("registries.%s.password", endpoint), loginPassword)
+		// Load configuration
+		cfg := viper.AllSettings()
+		registries, _ := cfg["registries"].(map[string]interface{})
+		if registries == nil {
+			registries = map[string]interface{}{}
+		}
+
+		key := config.NormalizeKey(endpoint)
+		registries[key] = map[string]interface{}{
+			"username": loginUsername,
+			"password": loginPassword,
+		}
+		cfg["registries"] = registries
+
+		// Save configuration in disk
+		configFile := filepath.Join(os.Getenv("HOME"), ".remake", "config.yaml")
+		viper.Reset()
+		viper.SetConfigFile(configFile)
+		if err := viper.MergeConfigMap(cfg); err != nil {
+			return fmt.Errorf("failed to write config: %w", err)
+		}
 		if err := saveConfig(); err != nil {
 			return err
 		}
@@ -99,5 +116,5 @@ func init() {
 	rootCmd.AddCommand(loginCmd)
 	loginCmd.Flags().StringVarP(&loginUsername, "username", "u", "", "Registry username")
 	loginCmd.Flags().StringVarP(&loginPassword, "password", "p", "", "Registry password")
-	loginCmd.Flags().BoolVar(&loginInsecure, "insecure", false, "Allow insecure HTTP registry (plain HTTP)")
+	loginCmd.Flags().BoolVar(&loginInsecure, "insecure", false, "Allow insecure HTTP registry")
 }

@@ -1,119 +1,74 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
 
-	"github.com/TrianaLab/remake/config"
+	"github.com/TrianaLab/remake/internal/util"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-	"oras.land/oras-go/v2"
-	"oras.land/oras-go/v2/content/file"
-	"oras.land/oras-go/v2/registry/remote"
-	"oras.land/oras-go/v2/registry/remote/auth"
-	"oras.land/oras-go/v2/registry/remote/retry"
 )
 
 var (
 	pullFile     string
+	pullNoCache  bool
 	pullInsecure bool
-	// allow overriding for tests
-	pullInitConfig = config.InitConfig
 )
 
-// pullCmd downloads a Makefile OCI artifact (or HTTP URL) into the working directory.
+// pullCmd downloads a Makefile OCI artifact or HTTP URL.
 var pullCmd = &cobra.Command{
-	Use:   "pull <remote_ref>",
-	Short: "Pull a Makefile OCI artifact or HTTP URL",
+	Use:   "pull <oci://endpoint/repo:tag|http(s)://...>",
+	Short: "Pull a Makefile artifact",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// 1) Init config
-		if err := pullInitConfig(); err != nil {
+		// Initialize configuration
+		if err := loginInitConfig(); err != nil {
 			return err
 		}
 
-		rawRef := args[0]
-
-		// 2) Handle HTTP/HTTPS
-		if strings.HasPrefix(rawRef, "http://") || strings.HasPrefix(rawRef, "https://") {
-			// Download via HTTP
-			resp, err := http.Get(rawRef)
-			if err != nil {
-				return err
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode != 200 {
-				return fmt.Errorf("HTTP error %d", resp.StatusCode)
-			}
-			// write to file
-			out := pullFile
-			if out == "" {
-				out = filepath.Base(rawRef)
-			}
-			f, err := os.Create(out)
-			if err != nil {
-				return err
-			}
-			defer f.Close()
-			_, err = io.Copy(f, resp.Body)
-			return err
-		}
-
-		// 3) OCI reference: strip prefix
-		oci := false
-		ref := rawRef
-		if strings.HasPrefix(rawRef, "oci://") {
-			oci = true
-			ref = rawRef[len("oci://"):]
-		}
-
-		// 4) Split host/path
-		parts0 := strings.SplitN(ref, "/", 2)
-		if len(parts0) != 2 {
-			return fmt.Errorf("invalid reference: %s", rawRef)
-		}
-		host := parts0[0]
-		path := parts0[1]
-
-		// 5) Extract tag
-		tag := "latest"
-		if idx := strings.LastIndex(path, ":"); idx != -1 {
-			tag = path[idx+1:]
-			path = path[:idx]
-		}
-
-		// 6) Default registry
-		if !oci {
-			host = viper.GetString("default_registry")
-		}
-
-		// 7) Prepare local store
-		ctx := context.Background()
-		fs, err := file.New(".")
+		// Select fetcher
+		ref := args[0]
+		fetcher, err := util.GetFetcher(ref)
 		if err != nil {
 			return err
 		}
-		defer fs.Close()
 
-		// 8) Remote repository
-		repoRef := host + "/" + path
-		repo, err := remote.NewRepository(repoRef)
+		// Fetch (cache or remote)
+		path, err := fetcher.Fetch(ref, !pullNoCache)
 		if err != nil {
 			return err
 		}
-		if pullInsecure {
-			repo.PlainHTTP = true
-		}
-		repo.Client = &auth.Client{Client: retry.DefaultClient, Cache: auth.NewCache()}
 
-		// 9) Pull
-		if _, err := oras.Copy(ctx, repo, tag, fs, tag, oras.DefaultCopyOptions); err != nil {
-			return fmt.Errorf("failed to pull artifact: %w", err)
+		// If a destination file is specified, copy from path
+		if pullFile != "" {
+			if path == "" {
+				return fmt.Errorf("artifact not found in cache and remote fetch disabled")
+			}
+			src, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer src.Close()
+
+			dst, err := os.Create(pullFile)
+			if err != nil {
+				return err
+			}
+			defer dst.Close()
+
+			if _, err := io.Copy(dst, src); err != nil {
+				return err
+			}
+
+			fmt.Printf("Saved to %s (copied from %s)\n", pullFile, path)
+			return nil
+		}
+
+		// Otherwise, print cache path or success message
+		if path != "" {
+			fmt.Printf("Saved to %s\n", path)
+		} else {
+			fmt.Printf("Fetched to current directory\n")
 		}
 
 		return nil
@@ -122,6 +77,7 @@ var pullCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(pullCmd)
-	pullCmd.Flags().StringVarP(&pullFile, "file", "f", "", "Destination Makefile or output file")
-	pullCmd.Flags().BoolVar(&pullInsecure, "insecure", false, "Allow plain HTTP for registry")
+	pullCmd.Flags().StringVarP(&pullFile, "file", "f", "", "Destination file (default: cache file)")
+	pullCmd.Flags().BoolVar(&pullNoCache, "no-cache", false, "Force download and ignore cache")
+	pullCmd.Flags().BoolVar(&pullInsecure, "insecure", false, "Allow insecure HTTP registry")
 }

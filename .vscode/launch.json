@@ -1,0 +1,27 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Remake CLI",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/main.go",
+      "args": ["${input:remakeCommand}", "${input:remakeArg}"]
+    }
+  ],
+  "inputs": [
+    {
+      "id": "remakeCommand",
+      "type": "pickString",
+      "description": "Choose remake command",
+      "options": ["run", "pull", "template", "login", "version"]
+    },
+    {
+      "id": "remakeArg",
+      "type": "promptString",
+      "description": "Argument (e.g. oci://... or make target)",
+      "default": ""
+    }
+  ]
+}
