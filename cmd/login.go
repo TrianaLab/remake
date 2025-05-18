@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/TrianaLab/remake/config"
@@ -15,8 +16,10 @@ import (
 	"oras.land/oras-go/v2/registry/remote/auth"
 )
 
-var loginUsername string
-var loginPassword string
+var (
+	loginUsername string
+	loginPassword string
+)
 
 var loginCmd = &cobra.Command{
 	Use:   "login [oci_endpoint]",
@@ -26,10 +29,16 @@ var loginCmd = &cobra.Command{
 		if err := config.InitConfig(); err != nil {
 			return err
 		}
+
 		endpoint := viper.GetString("default_registry")
 		if len(args) == 1 {
 			endpoint = args[0]
 		}
+
+		if !regexp.MustCompile(`^[A-Za-z0-9\.\-]+(?::[0-9]+)?$`).MatchString(endpoint) {
+			return fmt.Errorf("invalid registry %s", endpoint)
+		}
+
 		reader := bufio.NewReader(os.Stdin)
 		if loginUsername == "" {
 			fmt.Print("Username: ")
@@ -48,6 +57,7 @@ var loginCmd = &cobra.Command{
 			}
 			loginPassword = string(pw)
 		}
+
 		ctx := context.Background()
 		reg, err := remote.NewRegistry(endpoint)
 		if err != nil {
@@ -63,11 +73,13 @@ var loginCmd = &cobra.Command{
 		if err := reg.Ping(ctx); err != nil {
 			return fmt.Errorf("login failed: %w", err)
 		}
+
 		viper.Set(fmt.Sprintf("registries.%s.username", endpoint), loginUsername)
 		viper.Set(fmt.Sprintf("registries.%s.password", endpoint), loginPassword)
 		if err := config.SaveConfig(); err != nil {
 			return err
 		}
+
 		fmt.Printf("Connected to %s successfully\n", endpoint)
 		return nil
 	},
@@ -77,4 +89,7 @@ func init() {
 	rootCmd.AddCommand(loginCmd)
 	loginCmd.Flags().StringVarP(&loginUsername, "username", "u", "", "Registry username")
 	loginCmd.Flags().StringVarP(&loginPassword, "password", "p", "", "Registry password")
+
+	_ = viper.BindPFlag("username", loginCmd.Flags().Lookup("username"))
+	_ = viper.BindPFlag("password", loginCmd.Flags().Lookup("password"))
 }

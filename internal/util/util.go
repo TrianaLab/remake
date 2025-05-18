@@ -13,21 +13,32 @@ func NormalizeRef(ref string) string {
 	if strings.HasPrefix(ref, "http://") || strings.HasPrefix(ref, "https://") {
 		return ref
 	}
+
 	if strings.HasPrefix(ref, "oci://") {
 		name := strings.TrimPrefix(ref, "oci://")
+		defaultReg := config.GetDefaultRegistry()
+		if defaultReg == "" {
+			defaultReg = "ghcr.io"
+		}
+		if !strings.Contains(name, "/") {
+			name = defaultReg + "/" + name
+		}
 		if !strings.Contains(name, ":") {
 			name += ":latest"
 		}
 		return "oci://" + name
 	}
+
 	if _, err := os.Stat(ref); err == nil {
-		abs, err := filepath.Abs(ref)
-		if err == nil {
+		if abs, err := filepath.Abs(ref); err == nil {
 			return abs
 		}
-		return ref
 	}
+
 	defaultReg := config.GetDefaultRegistry()
+	if defaultReg == "" {
+		defaultReg = "ghcr.io"
+	}
 	name := ref
 	if !strings.Contains(name, ":") {
 		name += ":latest"

@@ -18,7 +18,7 @@ func FetchHTTP(url string) (string, error) {
 	if _, err := os.Stat(dest); err == nil {
 		return dest, nil
 	}
-	os.MkdirAll(filepath.Dir(dest), 0o755)
+	_ = os.MkdirAll(filepath.Dir(dest), 0o755)
 	resp, err := http.Get(url)
 	if err != nil {
 		return "", err

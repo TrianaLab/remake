@@ -24,7 +24,7 @@ func InitConfig() error {
 	viper.SetDefault("default_registry", "ghcr.io")
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			viper.SafeWriteConfig()
+			_ = viper.SafeWriteConfig()
 		} else {
 			return fmt.Errorf("error reading config file: %w", err)
 		}
@@ -40,11 +40,19 @@ func SaveConfig() error {
 }
 
 func GetDefaultMakefile() string {
-	if _, err := os.Stat("Makefile"); err == nil {
-		return "Makefile"
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		return ""
 	}
-	if _, err := os.Stat("makefile"); err == nil {
-		return "makefile"
+	for _, e := range entries {
+		if e.Name() == "makefile" {
+			return "makefile"
+		}
+	}
+	for _, e := range entries {
+		if e.Name() == "Makefile" {
+			return "Makefile"
+		}
 	}
 	return ""
 }
