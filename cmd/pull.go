@@ -21,13 +21,9 @@ var pullCmd = &cobra.Command{
 	Short: "Pull a Makefile artifact",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Initialize configuration
-		if err := loginInitConfig(); err != nil {
-			return err
-		}
+		ref := args[0]
 
 		// Select fetcher
-		ref := args[0]
 		fetcher, err := util.GetFetcher(ref)
 		if err != nil {
 			return err

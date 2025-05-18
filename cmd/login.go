@@ -34,11 +34,6 @@ var loginCmd = &cobra.Command{
 	Short: "Authenticate to an OCI registry and save credentials",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Initialize configuration
-		if err := loginInitConfig(); err != nil {
-			return err
-		}
-
 		endpoint := args[0]
 		if !regexp.MustCompile(`^[A-Za-z0-9\.\-]+(?::[0-9]+)?$`).MatchString(endpoint) {
 			return fmt.Errorf("invalid registry %s", endpoint)
