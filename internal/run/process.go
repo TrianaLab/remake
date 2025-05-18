@@ -1,3 +1,4 @@
+// internal/run/process.go
 package run
 
 import (
@@ -21,46 +22,43 @@ var (
 	includeRe      = regexp.MustCompile(`^\s*include\s+(.+)$`)
 )
 
-// Run generates a combined Makefile and executes the given targets.
-func Run(targets []string, file string, useCache bool) error {
+// Render processes src (local or remote) resolving includes, writes to outpath.
+func Render(src, outpath string, useCache bool) error {
+	// ensure cache dir
+	if err := os.MkdirAll(filepath.Dir(outpath), 0755); err != nil {
+		return err
+	}
+	visited := make(map[string]bool)
+	return processFile(src, visited, outpath, useCache)
+}
+
+// Run executes make target after rendering includes into a temp file.
+func Run(src string, targets []string, useCache bool) error {
 	cacheDir := config.GetCacheDir()
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		return err
 	}
-	genFile := filepath.Join(cacheDir, "Makefile.generated")
-	visited := make(map[string]bool)
-	if err := processFile(file, visited, genFile, useCache); err != nil {
+	gen := filepath.Join(cacheDir, "Makefile.generated")
+	if err := Render(src, gen, useCache); err != nil {
 		return err
 	}
-	cmd := exec.Command("make", append([]string{"-f", genFile}, targets...)...)
+	cmd := exec.Command("make", append([]string{"-f", gen}, targets...)...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
-	return cmd.Run()
-}
-
-// Template resolves includes and writes the result to outpath.
-func Template(src, outpath string, useCache bool) (string, error) {
-	if err := os.MkdirAll(filepath.Dir(outpath), 0755); err != nil {
-		return "", err
-	}
-	visited := make(map[string]bool)
-	if err := processFile(src, visited, outpath, useCache); err != nil {
-		return "", err
-	}
-	return outpath, nil
+	err := cmd.Run()
+	_ = os.Remove(gen)
+	return err
 }
 
 func processFile(src string, visited map[string]bool, outpath string, useCache bool) error {
-	// Fetch or use local
+	// fetch if remote
 	fetcher, ferr := util.GetFetcher(src)
 	if ferr == nil {
-		fpath, err := fetcher.Fetch(src, useCache)
-		if err != nil {
+		if path, err := fetcher.Fetch(src, useCache); err != nil {
 			return err
-		}
-		if fpath != "" {
-			src = fpath
+		} else if path != "" {
+			src = path
 		}
 	}
 
@@ -68,26 +66,24 @@ func processFile(src string, visited map[string]bool, outpath string, useCache b
 	if err != nil {
 		return fmt.Errorf("read %s: %w", src, err)
 	}
-
 	if err := os.MkdirAll(filepath.Dir(outpath), 0755); err != nil {
 		return err
 	}
-	outFile, err := os.Create(outpath)
+	f, err := os.Create(outpath)
 	if err != nil {
 		return err
 	}
-	defer outFile.Close()
+	defer f.Close()
 
 	scanner := bufio.NewScanner(strings.NewReader(string(data)))
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		// include: block
 		if includeBlockRe.MatchString(line) {
 			for scanner.Scan() {
 				next := scanner.Text()
 				if m := listItemRe.FindStringSubmatch(next); m != nil {
-					if err := handleInclude(m[1], visited, outFile, useCache); err != nil {
+					if err := handleInclude(m[1], visited, f, useCache); err != nil {
 						return err
 					}
 				} else {
@@ -97,64 +93,54 @@ func processFile(src string, visited map[string]bool, outpath string, useCache b
 			}
 		}
 
-		// inline single include
 		if m := includeRe.FindStringSubmatch(line); m != nil {
 			for _, ref := range strings.Fields(m[1]) {
-				if err := handleInclude(ref, visited, outFile, useCache); err != nil {
+				if err := handleInclude(ref, visited, f, useCache); err != nil {
 					return err
 				}
 			}
 			continue
 		}
 
-		// normalize indentation
 		if len(line) > 0 && line[0] == ' ' {
 			line = "\t" + strings.TrimLeft(line, " ")
 		}
 
-		if _, err := outFile.WriteString(line + "\n"); err != nil {
+		if _, err := f.WriteString(line + "\n"); err != nil {
 			return err
 		}
 	}
-
 	return scanner.Err()
 }
 
-func handleInclude(ref string, visited map[string]bool, outFile *os.File, useCache bool) error {
+func handleInclude(ref string, visited map[string]bool, w io.Writer, useCache bool) error {
 	if visited[ref] {
-		return fmt.Errorf("cyclic include: %s", ref)
+		return fmt.Errorf("cyclic include detected: %s", ref)
 	}
 	visited[ref] = true
 
-	// Fetch referenced Makefile
+	// fetch nested
 	fetcher, ferr := util.GetFetcher(ref)
 	if ferr == nil {
-		fpath, err := fetcher.Fetch(ref, useCache)
-		if err != nil {
+		if path, err := fetcher.Fetch(ref, useCache); err != nil {
 			return err
-		}
-		if fpath != "" {
-			ref = fpath
+		} else if path != "" {
+			ref = path
 		}
 	}
 
-	// Unique nested output
+	// render nested
 	cacheDir := config.GetCacheDir()
 	unique := fmt.Sprintf("%x.mk", sha256.Sum256([]byte(ref)))
 	nestedOut := filepath.Join(cacheDir, unique+".generated")
 	if err := processFile(ref, visited, nestedOut, useCache); err != nil {
 		return err
 	}
-	return inlineFile(outFile, nestedOut)
-}
-
-func inlineFile(w io.Writer, path string) error {
-	data, err := os.ReadFile(path)
+	// inline
+	data, err := os.ReadFile(nestedOut)
 	if err != nil {
-		return fmt.Errorf("inline read %s: %w", path, err)
+		return fmt.Errorf("inline read %s: %w", nestedOut, err)
 	}
-	if _, err := w.Write(data); err != nil {
-		return fmt.Errorf("inline write %s: %w", path, err)
-	}
-	return nil
+	_, err = w.Write(data)
+	return err
 }
