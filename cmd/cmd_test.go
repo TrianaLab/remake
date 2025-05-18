@@ -586,3 +586,74 @@ func TestLoginCmd_SuccessInteractive(t *testing.T) {
 		t.Errorf("unexpected output: %s", out)
 	}
 }
+
+func TestLoginCmd_UsernameReadSuccess(t *testing.T) {
+	loginUsername = ""
+	loginPassword = ""
+	initConfig = func() error { return nil }
+	saveConfig = func() error { return nil }
+	inputReader = func() *bufio.Reader {
+		return bufio.NewReader(strings.NewReader("alice_user\n"))
+	}
+	passwordReader = func(fd int) ([]byte, error) {
+		return []byte("pass123"), nil
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+	hostPort := strings.TrimPrefix(srv.URL, "http://")
+	newRegistry = func(endpoint string) (*remote.Registry, error) {
+		r, err := remote.NewRegistry(endpoint)
+		if err != nil {
+			return nil, err
+		}
+		r.PlainHTTP = true
+		return r, nil
+	}
+
+	old := os.Stdout
+	rp, wp, _ := os.Pipe()
+	os.Stdout = wp
+
+	err := loginCmd.RunE(loginCmd, []string{hostPort})
+	wp.Close()
+	os.Stdout = old
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	outBytes, _ := io.ReadAll(rp)
+	out := string(outBytes)
+	if !strings.Contains(out, "Username: ") {
+		t.Errorf("missing Username prompt, got %q", out)
+	}
+	if loginUsername != "alice_user" {
+		t.Errorf("expected loginUsername 'alice_user', got %q", loginUsername)
+	}
+}
+
+type errReader struct{}
+
+func (errReader) Read(p []byte) (int, error) {
+	return 0, errors.New("read error")
+}
+func TestLoginCmd_UsernameReadError(t *testing.T) {
+	loginUsername = ""
+	loginPassword = ""
+	initConfig = func() error { return nil }
+	saveConfig = func() error { return nil }
+	inputReader = func() *bufio.Reader {
+		errR := &errReader{}
+		return bufio.NewReader(errR)
+	}
+	passwordReader = func(fd int) ([]byte, error) { return []byte("pass123"), nil }
+	newRegistry = func(endpoint string) (*remote.Registry, error) {
+		r := &remote.Registry{}
+		return r, nil
+	}
+
+	err := loginCmd.RunE(loginCmd, []string{"example.com"})
+	if err == nil || !strings.Contains(err.Error(), "read error") {
+		t.Fatalf("expected read error, got %v", err)
+	}
+}
