@@ -63,20 +63,14 @@ include two.mk
 
 end`
 	writeFile(t, dir, "main.mk", main)
-	writeFile(t, dir, "one.mk", "ONE")
-	writeFile(t, dir, "two.mk", "TWO")
+	writeFile(t, dir, "one.mk", "ONE\n")
+	writeFile(t, dir, "two.mk", "TWO\n")
 	out := filepath.Join(dir, "out.mk")
-	// call Render with full path
 	if err := Render(filepath.Join(dir, "main.mk"), out, true); err != nil {
 		t.Fatalf("Render failed: %v", err)
 	}
 	data, _ := os.ReadFile(out)
 	got := string(data)
-	if !strings.Contains(got, "ONE") || !strings.Contains(got, "TWO") || !strings.Contains(got, "other: val") {
-		t.Errorf("includes not in output: %q", got)
-	}
-	data, _ = os.ReadFile(out)
-	got = string(data)
 	if !strings.Contains(got, "ONE\n") || !strings.Contains(got, "TWO\n") || !strings.Contains(got, "other: val\n") {
 		t.Errorf("includes not in output: %q", got)
 	}
@@ -88,10 +82,8 @@ func TestRender_CyclicInclude(t *testing.T) {
 	defer os.Chdir(origWd)
 	os.Chdir(dir)
 
-	writeFile(t, dir, "A.mk", `include: 
- - B.mk
-`)
-	writeFile(t, dir, "B.mk", "include A.mk")
+	writeFile(t, dir, "A.mk", "include:\n - B.mk\n")
+	writeFile(t, dir, "B.mk", "include A.mk\n")
 	out := filepath.Join(dir, "out.mk")
 	src := filepath.Join(dir, "A.mk")
 	err := Render(src, out, true)
@@ -106,9 +98,7 @@ func TestRun_Success(t *testing.T) {
 	defer os.Chdir(origWd)
 	os.Chdir(dir)
 
-	writeFile(t, dir, "Makefile", `all:
-	echo HELLO
-`)
+	writeFile(t, dir, "Makefile", "all:\n\techo HELLO\n")
 	// fake make: always succeed
 	script := `#!/bin/sh
 exit 0
@@ -120,31 +110,16 @@ exit 0
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
-	// generated file cleaned up
 	cache := config.GetCacheDir()
 	gen := filepath.Join(cache, "Makefile.generated")
 	if _, err := os.Stat(gen); !os.IsNotExist(err) {
 		t.Errorf("expected generated file removed, still exists: %v", gen)
 	}
-	// generated file cleaned up
-	cache = config.GetCacheDir()
-	gen = filepath.Join(cache, "Makefile.generated")
-	if _, err := os.Stat(gen); !os.IsNotExist(err) {
-		t.Errorf("expected generated file removed, still exists: %v", gen)
-	}
-
-	// generated file cleaned up
-	cache = config.GetCacheDir()
-	gen = filepath.Join(cache, "Makefile.generated")
-	if _, err := os.Stat(gen); !os.IsNotExist(err) {
-		t.Errorf("expected generated file removed, still exists: %v", gen)
-	}
-
-	// generated file cleaned up
-	cache = config.GetCacheDir()
-	gen = filepath.Join(cache, fmt.Sprintf("%x.mk.generated", sha256.Sum256([]byte("Makefile"))))
-	if _, err := os.Stat(gen); !os.IsNotExist(err) {
-		t.Errorf("expected generated file removed, still exists")
+	// test cleanup of checksum name
+	csgen := fmt.Sprintf("%x.mk.generated", sha256.Sum256([]byte(filepath.Join(dir, "Makefile"))))
+	csPath := filepath.Join(cache, csgen)
+	if _, err := os.Stat(csPath); !os.IsNotExist(err) {
+		t.Errorf("expected checksum-generated file removed, still exists: %v", csPath)
 	}
 }
 
@@ -155,11 +130,13 @@ func TestRun_MakeError(t *testing.T) {
 	os.Chdir(dir)
 
 	writeFile(t, dir, "Makefile", "all:\n\texit 1\n")
-	script := `#!/bin/sh\nexit 1`
+	script := `#!/bin/sh
+exit 1
+`
 	restore := prependFakeMake(t, script)
 	defer restore()
 
-	err := Run("Makefile", []string{"all"}, true)
+	err := Run(filepath.Join(dir, "Makefile"), []string{"all"}, true)
 	if err == nil {
 		t.Fatalf("expected error from failed make, got nil")
 	}
