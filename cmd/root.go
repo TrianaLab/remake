@@ -35,3 +35,7 @@ func Execute() {
 
 func init() {
 }
+
+func NewRemakeCommand() *cobra.Command {
+	return rootCmd
+}

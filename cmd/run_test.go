@@ -108,6 +108,16 @@ func TestRunCmd_DefaultFileThenErrorAndSuccess(t *testing.T) {
 	}
 }
 
+func TestNewRemakeCommand_ReturnsRootCmd(t *testing.T) {
+	cmd := NewRemakeCommand()
+	if cmd == nil {
+		t.Fatal("expected non-nil command from NewRemakeCommand")
+	}
+	if cmd.Use != "remake" {
+		t.Errorf("expected Use to be 'remake', got %q", cmd.Use)
+	}
+}
+
 func init() {
 	// reset flags for reuse
 	rootCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) { f.Changed = false })
