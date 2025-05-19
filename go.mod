@@ -3,10 +3,8 @@ module github.com/TrianaLab/remake
 go 1.23.5
 
 require (
-	github.com/google/go-containerregistry v0.20.3
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/spf13/cobra v1.9.1
-	github.com/spf13/pflag v1.0.6
 	github.com/spf13/viper v1.20.1
 	golang.org/x/term v0.32.0
 	oras.land/oras-go/v2 v2.6.0
@@ -22,6 +20,7 @@ require (
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.12.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
+	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
