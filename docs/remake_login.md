@@ -1,9 +1,25 @@
 ## remake login
 
-Authenticate to an OCI registry and save credentials
+Authenticate to an OCI registry and store credentials locally.
+
+### Synopsis
+
+Login prompts for username and password (unless supplied via flags) 
+and saves them in the local config for the specified registry.
+These credentials are used by pull and push commands to authenticate.
 
 ```
 remake login <oci_endpoint> [flags]
+```
+
+### Examples
+
+```
+ # Interactive login
+  remake login registry.example.com
+
+  # Login using flags
+  remake login -u myuser -p mypass registry.example.com
 ```
 
 ### Options

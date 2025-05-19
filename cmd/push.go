@@ -25,8 +25,20 @@ var (
 // pushCmd pushes a local Makefile as an OCI artifact.
 var pushCmd = &cobra.Command{
 	Use:   "push <oci://endpoint/repo:tag>",
-	Short: "Push a Makefile as an OCI artifact",
-	Args:  cobra.ExactArgs(1),
+	Short: "Push a Makefile as an OCI artifact to a registry.",
+	Long: `Push packages a local Makefile into an OCI artifact, 
+which must be a valid OCI reference (e.g. oci://registry.example.com/repo:tag).
+Credentials are loaded from the local config (via login or config file).
+The --file flag can override the Makefile path.`,
+	Example: ` # Push the default Makefile to a registry
+  remake push oci://registry.example.com/myrepo:1.0.0
+
+  # Push a custom Makefile file
+  remake push -f CustomMakefile oci://registry.example.com/myrepo:2.0.0
+
+  # Push without TLS verification
+  remake push --insecure oci://registry.example.com/myrepo:latest`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		raw := args[0]
 		if !strings.HasPrefix(raw, "oci://") {

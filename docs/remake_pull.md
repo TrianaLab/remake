@@ -1,9 +1,31 @@
 ## remake pull
 
-Pull an artifact and print its content
+Pull an artifact and print its content.
+
+### Synopsis
+
+Pull retrieves a Makefile artifact from the specified endpoint, which can be:
+• An HTTP(s) URL pointing to a raw Makefile
+• An OCI registry reference (e.g. oci://registry.example.com/repo:tag)
+The command will cache downloaded artifacts under the configured cache directory to speed up
+subsequent pulls. Use the --no-cache flag to bypass the cache and force a fresh download.
+The content of the Makefile is printed to stdout for inspection or piping into other tools.
 
 ```
 remake pull <endpoint> [flags]
+```
+
+### Examples
+
+```
+  # Pull a Makefile over HTTP
+  remake pull https://example.com/Makefile
+
+  # Pull a Makefile from an OCI registry
+  remake pull oci://registry.example.com/myrepo:latest
+
+  # Pull a Makefile without using cache
+  remake pull --no-cache https://example.com/Makefile
 ```
 
 ### Options

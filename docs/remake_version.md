@@ -1,9 +1,21 @@
 ## remake version
 
-Print the version of remake
+Print the current Remake CLI version.
+
+### Synopsis
+
+Version prints the Remake CLI version and build metadata (commit hash, build date). 
+Useful for debugging and ensuring compatibility.
 
 ```
 remake version [flags]
+```
+
+### Examples
+
+```
+ # Show Remake version
+  remake version
 ```
 
 ### Options

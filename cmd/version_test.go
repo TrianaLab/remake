@@ -40,7 +40,7 @@ func TestVersionCmd_Default(t *testing.T) {
 	if err != nil {
 		t.Fatalf("captureStdout error: %v", err)
 	}
-	expected := "Version: dev\n"
+	expected := "version: dev\n"
 	if out != expected {
 		t.Errorf("expected %q, got %q", expected, out)
 	}
@@ -61,7 +61,7 @@ func TestVersionCmd_Custom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("captureStdout error: %v", err)
 	}
-	if !strings.Contains(out, "Version: 1.2.3") {
+	if !strings.Contains(out, "version: 1.2.3") {
 		t.Errorf("expected output to contain custom version, got %q", out)
 	}
 }
