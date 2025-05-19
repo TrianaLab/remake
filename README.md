@@ -126,15 +126,6 @@ You can edit this file to change:
 
 ---
 
-## 🎯 Examples - TBD
-
-1. **Run a remote Makefile with fresh cache**
-```bash
-   remake run https://raw.githubusercontent.com/user/repo/main/makefile --no-cache build
-```
-
----
-
 ## 🤝 Contributing
 
 We welcome contributions! Feel free to open issues or submit pull requests:
