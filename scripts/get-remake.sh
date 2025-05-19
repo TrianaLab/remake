@@ -2,11 +2,10 @@
 set -euo pipefail
 
 BINARY_NAME="remake"
-REPO="TrianaLab/remake"
-DEFAULT_INSTALL_DIR="/usr/local/bin"
-INSTALL_DIR="${REM_INSTALL_DIR:-$DEFAULT_INSTALL_DIR}"
+INSTALL_DIR="${REM_INSTALL_DIR:-/usr/local/bin}"
 USE_SUDO="${REM_USE_SUDO:-true}"
 VERIFY_CHECKSUM="${REM_VERIFY_CHECKSUM:-true}"
+DESIRED_VERSION="${DESIRED_VERSION:-}"
 
 has() { type "$1" &>/dev/null; }
 
@@ -30,7 +29,7 @@ check_prereqs() {
     exit 1
   fi
   if [ "$VERIFY_CHECKSUM" = "true" ] && ! has openssl; then
-    echo "openssl is required for checksum verification" >&2
+    echo "openssl is required" >&2
     exit 1
   fi
   if ! has tar; then
@@ -48,7 +47,7 @@ run_as_root() {
 }
 
 get_latest_tag() {
-  url="https://get.remake.sh/remake-latest-version"
+  local url="https://get.remake.sh/remake-latest-version"
   if has curl; then
     TAG="$(curl -fsSL "$url")"
   else
@@ -61,23 +60,24 @@ get_latest_tag() {
 }
 
 download_and_verify() {
-  DIST="${BINARY_NAME}-${TAG}-${OS}-${ARCH}.tar.gz"
-  BASE_URL="https://get.remake.sh"
-  ARCHIVE_URL="$BASE_URL/$DIST"
-  CHECK_URL="$ARCHIVE_URL.sha256"
+  local dist="${BINARY_NAME}-${TAG}-${OS}-${ARCH}.tar.gz"
+  local base="https://get.remake.sh"
+  local archive_url="$base/$dist"
+  local checksum_url="$archive_url.sha256"
 
-  TMPDIR="$(mktemp -d)"
-  cd "$TMPDIR"
+  SCRIPT_TMPDIR="$(mktemp -d)"
+  cd "$SCRIPT_TMPDIR"
 
   if has curl; then
-    curl -fsSL "$CHECK_URL" -o checksum
-    curl -fsSL "$ARCHIVE_URL" -o archive
+    curl -fsSL "$checksum_url" -o checksum
+    curl -fsSL "$archive_url" -o archive
   else
-    wget -qO checksum "$CHECK_URL"
-    wget -qO archive "$ARCHIVE_URL"
+    wget -qO checksum "$checksum_url"
+    wget -qO archive "$archive_url"
   fi
 
   if [ "$VERIFY_CHECKSUM" = "true" ]; then
+    local sum exp
     sum="$(openssl sha256 archive | awk '{print $2}')"
     exp="$(cat checksum)"
     if [ "$sum" != "$exp" ]; then
@@ -85,29 +85,30 @@ download_and_verify() {
       exit 1
     fi
   fi
-
-  echo "$TMPDIR"
 }
 
 install_binary() {
-  tmp="$1"
-  cd "$tmp"
-  tar xf archive
-  run_as_root cp "$BINARY_NAME" "$INSTALL_DIR/"
+  tar xf "$SCRIPT_TMPDIR/archive" -C "$SCRIPT_TMPDIR"
+  run_as_root cp "$SCRIPT_TMPDIR/$BINARY_NAME" "$INSTALL_DIR/"
 }
 
 cleanup() {
-  [ -n "${TMPDIR:-}" ] && rm -rf "$TMPDIR"
+  [ -n "${SCRIPT_TMPDIR:-}" ] && rm -rf "$SCRIPT_TMPDIR"
 }
-
-trap 'cleanup' EXIT
+trap cleanup EXIT
 
 main() {
   init_platform
   check_prereqs
-  get_latest_tag
-  TMPDIR="$(download_and_verify)"
-  install_binary "$TMPDIR"
+
+  if [ -z "$DESIRED_VERSION" ]; then
+    get_latest_tag
+  else
+    TAG="$DESIRED_VERSION"
+  fi
+
+  download_and_verify
+  install_binary
   "$INSTALL_DIR/$BINARY_NAME" version
 }
 
