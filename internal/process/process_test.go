@@ -56,63 +56,6 @@ func TestRun(t *testing.T) {
 	}
 }
 
-func TestTemplate(t *testing.T) {
-	tmp := t.TempDir()
-	makeContent := "test:\n\techo test"
-	makePath := filepath.Join(tmp, "Makefile")
-	if err := os.WriteFile(makePath, []byte(makeContent), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	noReadPath := filepath.Join(tmp, "no-read")
-	if err := os.WriteFile(noReadPath, []byte(makeContent), 0000); err != nil {
-		t.Fatal(err)
-	}
-
-	tests := []struct {
-		name     string
-		src      string
-		useCache bool
-		wantErr  bool
-	}{
-		{
-			name:     "Local file success",
-			src:      makePath,
-			useCache: false,
-			wantErr:  false,
-		},
-		{
-			name:     "Local file not found",
-			src:      "nonexistent",
-			useCache: false,
-			wantErr:  true,
-		},
-		{
-			name:     "Cannot read file",
-			src:      noReadPath,
-			useCache: false,
-			wantErr:  true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			oldStdout := os.Stdout
-			_, w, _ := os.Pipe()
-			os.Stdout = w
-
-			err := Template(tt.src, tt.useCache)
-
-			w.Close()
-			os.Stdout = oldStdout
-
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Template() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 func TestFetchSource(t *testing.T) {
 	tmp := t.TempDir()
 	viper.Set("cacheDir", tmp)

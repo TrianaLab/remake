@@ -29,24 +29,6 @@ func Run(src string, targets []string, useCache bool) error {
 	return nil
 }
 
-// Template fetches a Makefile (local or remote) and prints its contents to stdout.
-func Template(src string, useCache bool) error {
-	// Fetch source if remote
-	local, err := fetchSource(src, useCache)
-	if err != nil {
-		return err
-	}
-	// Read and print the file
-	data, err := os.ReadFile(local)
-	if err != nil {
-		return fmt.Errorf("cannot read template file: %w", err)
-	}
-	if _, err := os.Stdout.Write(data); err != nil {
-		return fmt.Errorf("cannot write template to stdout: %w", err)
-	}
-	return nil
-}
-
 // fetchSource uses util.Fetcher to obtain a local path for a given reference or returns local file
 func fetchSource(ref string, useCache bool) (string, error) {
 	// try remote fetcher

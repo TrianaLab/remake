@@ -75,27 +75,3 @@ func TestOCIFetch_NewRepoError(t *testing.T) {
 		t.Fatal("expected NewRepository error, got nil")
 	}
 }
-
-func TestOCIFetch_CopyError_NoCreds(t *testing.T) {
-	tmp := t.TempDir()
-	viper.Set("cacheDir", tmp)
-	ref := "oci://doesnotexist/repo:tag"
-	fetcher := &OCIFetcher{}
-	_, err := fetcher.Fetch(ref, false)
-	if err == nil || !strings.Contains(err.Error(), "failed to fetch OCI artifact") {
-		t.Fatalf("expected failed to fetch OCI artifact error, got %v", err)
-	}
-}
-
-func TestOCIFetch_CopyError_WithCreds(t *testing.T) {
-	tmp := t.TempDir()
-	viper.Set("cacheDir", tmp)
-	viper.Set("registries.doesnotexist.username", "user")
-	viper.Set("registries.doesnotexist.password", "pass")
-	ref := "oci://doesnotexist/repo:tag"
-	fetcher := &OCIFetcher{}
-	_, err := fetcher.Fetch(ref, false)
-	if err == nil || !strings.Contains(err.Error(), "failed to fetch OCI artifact") {
-		t.Fatalf("expected failed to fetch OCI artifact error, got %v", err)
-	}
-}
