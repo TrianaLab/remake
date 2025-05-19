@@ -1,4 +1,4 @@
-package util
+package fetch
 
 import (
 	"context"
@@ -42,7 +42,7 @@ func (o *OCIFetcher) Fetch(ref string, useCache bool) (string, error) {
 		repoTag = repoTag[:idx]
 	}
 
-	cacheDir := filepath.Join(config.GetCacheDir(), host, repoTag, tag)
+	cacheDir := filepath.Join(viper.GetString("cacheDir"), host, repoTag, tag)
 	fs, err := file.New(cacheDir)
 	if err != nil {
 		return "", err
@@ -53,6 +53,10 @@ func (o *OCIFetcher) Fetch(ref string, useCache bool) (string, error) {
 	repo, err := remote.NewRepository(repoRef)
 	if err != nil {
 		return "", err
+	}
+
+	if viper.GetBool("insecure") {
+		repo.PlainHTTP = true
 	}
 
 	// Optionally set credentials if available

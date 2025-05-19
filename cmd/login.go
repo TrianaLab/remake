@@ -110,5 +110,4 @@ func init() {
 	rootCmd.AddCommand(loginCmd)
 	loginCmd.Flags().StringVarP(&loginUsername, "username", "u", "", "Registry username")
 	loginCmd.Flags().StringVarP(&loginPassword, "password", "p", "", "Registry password")
-	loginCmd.Flags().BoolVar(&loginInsecure, "insecure", false, "Allow insecure HTTP registry")
 }

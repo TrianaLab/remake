@@ -1,164 +1,131 @@
 package cmd
 
 import (
-	"bytes"
-	"errors"
-	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
-	"github.com/spf13/pflag"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
-// restoreTemplateStubs resets package-level vars after each test
-func restoreTemplateStubs(origFile string, origNoCache bool,
-	origDef func() string, origCache func() string,
-	origRender func(string, string, bool) error,
-) {
-	templateFile = origFile
-	templateNoCache = origNoCache
-	templateDefaultMakefileFn = origDef
-	cacheDirFn = origCache
-	renderFn = origRender
-}
+func TestTemplateCommand_Execute(t *testing.T) {
+	// Save original values to restore after test
+	originalFile := templateFile
+	originalNoCache := templateNoCache
+	defer func() {
+		templateFile = originalFile
+		templateNoCache = originalNoCache
+		viper.Reset()
+	}()
 
-func TestTemplateCmd_NoFileNoDefault(t *testing.T) {
-	// Stub out hooks
-	origFile, origNoCache := templateFile, templateNoCache
-	origDef, origCache, origRender := templateDefaultMakefileFn, cacheDirFn, renderFn
-	defer restoreTemplateStubs(origFile, origNoCache, origDef, origCache, origRender)
-
-	templateFile = ""
-	templateDefaultMakefileFn = func() string { return "" }
-	cacheDirFn = func() string { return "" } // not used
-	renderFn = func(src, out string, useCache bool) error { return nil }
-
-	// Run command
-	buf := &bytes.Buffer{}
-	rootCmd.SetOut(buf)
-	rootCmd.SetErr(buf)
-	rootCmd.SetArgs([]string{"template"})
-	err := rootCmd.Execute()
-	if err == nil || !strings.Contains(err.Error(), "no Makefile found; specify with -f flag") {
-		t.Fatalf("expected missing Makefile error, got %v", err)
-	}
-}
-
-func TestTemplateCmd_RenderError(t *testing.T) {
-	origFile, origNoCache := templateFile, templateNoCache
-	origDef, origCache, origRender := templateDefaultMakefileFn, cacheDirFn, renderFn
-	defer restoreTemplateStubs(origFile, origNoCache, origDef, origCache, origRender)
-
-	templateFile = ""
-	templateDefaultMakefileFn = func() string { return "Makefile" }
-	// Provide some cache dir
-	tmp := os.TempDir()
-	cacheDirFn = func() string { return tmp }
-	renderFn = func(src, out string, useCache bool) error {
-		return errors.New("render failed")
-	}
-
-	buf := &bytes.Buffer{}
-	rootCmd.SetOut(buf)
-	rootCmd.SetErr(buf)
-	rootCmd.SetArgs([]string{"template"})
-	err := rootCmd.Execute()
-	if err == nil || !strings.Contains(err.Error(), "render failed") {
-		t.Fatalf("expected render error, got %v", err)
-	}
-}
-
-func TestTemplateCmd_OpenError(t *testing.T) {
-	origFile, origNoCache := templateFile, templateNoCache
-	origDef, origCache, origRender := templateDefaultMakefileFn, cacheDirFn, renderFn
-	defer restoreTemplateStubs(origFile, origNoCache, origDef, origCache, origRender)
-
-	templateFile = ""
-	templateDefaultMakefileFn = func() string { return "Makefile" }
-	cacheDirTmp := t.TempDir()
-	cacheDirFn = func() string { return cacheDirTmp }
-	// render succeeds but does not actually write the file
-	renderFn = func(src, out string, useCache bool) error { return nil }
-
-	buf := &bytes.Buffer{}
-	rootCmd.SetOut(buf)
-	rootCmd.SetErr(buf)
-	rootCmd.SetArgs([]string{"template"})
-	err := rootCmd.Execute()
-	if err == nil || !strings.Contains(err.Error(), "no such file or directory") {
-		t.Fatalf("expected open-file error, got %v", err)
-	}
-}
-
-func captureTemplateStdout(f func()) (string, error) {
-	// keep copy of real stdout
-	old := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		return "", err
-	}
-	os.Stdout = w
-
-	// run the function
-	f()
-
-	// restore stdout and read buffer
-	w.Close()
-	os.Stdout = old
-
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, r); err != nil {
-		return "", err
-	}
-	return buf.String(), nil
-}
-
-func TestTemplateCmd_Success(t *testing.T) {
-	// stub hooks as before...
-	origFile, origNoCache := templateFile, templateNoCache
-	origDef, origCache, origRender := templateDefaultMakefileFn, cacheDirFn, renderFn
-	defer restoreTemplateStubs(origFile, origNoCache, origDef, origCache, origRender)
-
-	// prepare a real Makefile and cache directory
+	// Create test directory and file
 	tmp := t.TempDir()
-	os.Chdir(tmp)
-	const name = "Makefile"
-	if err := os.WriteFile(name, []byte("foo"), 0644); err != nil {
-		t.Fatalf("write source Makefile: %v", err)
-	}
-	templateDefaultMakefileFn = func() string { return name }
-	cacheTmp := t.TempDir()
-	cacheDirFn = func() string { return cacheTmp }
-
-	// stub renderFn to write the generated file
-	renderFn = func(src, out string, useCache bool) error {
-		return os.WriteFile(out, []byte("rendered content"), 0644)
+	makeContent := "test:\n\techo test"
+	makePath := filepath.Join(tmp, "Makefile")
+	if err := os.WriteFile(makePath, []byte(makeContent), 0644); err != nil {
+		t.Fatal(err)
 	}
 
-	// capture os.Stdout around Execute
-	rootCmd.SetArgs([]string{"template"})
-	output, err := captureTemplateStdout(func() {
-		if err := rootCmd.Execute(); err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
-	})
-	if err != nil {
-		t.Fatalf("could not capture stdout: %v", err)
+	tests := []struct {
+		name      string
+		setupFunc func()
+		wantErr   bool
+	}{
+		{
+			name: "success with file flag",
+			setupFunc: func() {
+				templateFile = makePath
+				templateNoCache = false
+			},
+			wantErr: false,
+		},
+		{
+			name: "success with config default",
+			setupFunc: func() {
+				templateFile = ""
+				templateNoCache = false
+				viper.Set("defaultMakefile", makePath)
+			},
+			wantErr: false,
+		},
+		{
+			name: "error no file specified",
+			setupFunc: func() {
+				templateFile = ""
+				templateNoCache = false
+				viper.Reset()
+			},
+			wantErr: true,
+		},
+		{
+			name: "error nonexistent file",
+			setupFunc: func() {
+				templateFile = "nonexistent"
+				templateNoCache = false
+			},
+			wantErr: true,
+		},
+		{
+			name: "with no-cache flag",
+			setupFunc: func() {
+				templateFile = makePath
+				templateNoCache = true
+			},
+			wantErr: false,
+		},
 	}
 
-	if !strings.Contains(output, "rendered content") {
-		t.Errorf("stdout missing rendered content: %q", output)
-	}
-	// generated file was removed
-	if _, err := os.Stat(filepath.Join(cacheTmp, "Makefile.generated")); !os.IsNotExist(err) {
-		t.Errorf("expected generated file removed, but still exists")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			viper.Reset()
+
+			// Setup test state
+			tt.setupFunc()
+
+			cmd := &cobra.Command{}
+			err := templateCmd.RunE(cmd, []string{})
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("templateCmd.Execute() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
 	}
 }
 
-func init() {
-	// Clear any flag state between test runs
-	rootCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) { f.Changed = false })
-	templateCmd.Flags().VisitAll(func(f *pflag.Flag) { f.Changed = false })
+func TestTemplateInit(t *testing.T) {
+	// Clean up viper state before and after test
+	viper.Reset()
+	defer viper.Reset()
+
+	// Test that the command is properly initialized
+	if templateCmd.Use != "template [flags]" {
+		t.Errorf("Expected Use to be 'template [flags]', got %s", templateCmd.Use)
+	}
+
+	// Test flag registration
+	fileFlag := templateCmd.Flags().Lookup("file")
+	if fileFlag == nil {
+		t.Error("file flag not registered")
+	}
+	if fileFlag.Shorthand != "f" {
+		t.Errorf("Expected file flag shorthand to be 'f', got %s", fileFlag.Shorthand)
+	}
+
+	noCacheFlag := templateCmd.Flags().Lookup("no-cache")
+	if noCacheFlag == nil {
+		t.Error("no-cache flag not registered")
+	}
+
+	// Test viper binding
+	err := viper.BindPFlag("defaultMakefile", templateCmd.Flags().Lookup("file"))
+	if err != nil {
+		t.Errorf("Failed to bind flag to viper: %v", err)
+	}
+
+	// Set a value to verify binding
+	templateCmd.Flags().Set("file", "test.mk")
+	if viper.GetString("defaultMakefile") != "test.mk" {
+		t.Error("defaultMakefile not properly bound to viper")
+	}
 }

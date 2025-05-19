@@ -48,7 +48,7 @@ var pushCmd = &cobra.Command{
 		// determine file to push
 		filePath := pushFile
 		if filePath == "" {
-			filePath = config.GetDefaultMakefile()
+			filePath = viper.GetString("defaultMakefile")
 			if filePath == "" {
 				return fmt.Errorf("no Makefile found; specify with -f flag")
 			}
@@ -116,5 +116,4 @@ var pushCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(pushCmd)
 	pushCmd.Flags().StringVarP(&pushFile, "file", "f", "", "Makefile to push (default: Makefile or makefile)")
-	pushCmd.Flags().BoolVar(&pushInsecure, "insecure", false, "Allow insecure HTTP registry (plain HTTP)")
 }

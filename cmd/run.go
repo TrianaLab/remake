@@ -3,36 +3,34 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/TrianaLab/remake/config"
-	"github.com/TrianaLab/remake/internal/run"
+	"github.com/TrianaLab/remake/internal/process"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var (
-	runFile              string
-	runNoCache           bool
-	runDefaultMakefileFn = config.GetDefaultMakefile
-	runFn                = run.Run
+	runFile    string
+	runNoCache bool
 )
 
 var runCmd = &cobra.Command{
-	Use:   "run <target>",
-	Short: "Run make target with remote includes resolved",
-	Args:  cobra.MinimumNArgs(1),
+	Use:   "run [flags] [targets]",
+	Short: "Run a Makefile target",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		file := runFile
-		if file == "" {
-			file = runDefaultMakefileFn()
-			if file == "" {
-				return fmt.Errorf("no Makefile found; specify with -f")
+		src := runFile
+		if src == "" {
+			src = viper.GetString("defaultMakefile")
+			if src == "" {
+				return fmt.Errorf("no Makefile specified; use -f flag or config")
 			}
 		}
-		return runFn(file, args, !runNoCache)
+		return process.Run(src, args, !runNoCache)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(runCmd)
-	runCmd.Flags().StringVarP(&runFile, "file", "f", "", "Makefile to use")
-	runCmd.Flags().BoolVar(&runNoCache, "no-cache", false, "Skip cache")
+	runCmd.Flags().StringVarP(&runFile, "file", "f", "", "Makefile path or remote reference")
+	runCmd.Flags().BoolVar(&runNoCache, "no-cache", false, "disable cache")
+	viper.BindPFlag("defaultMakefile", runCmd.Flags().Lookup("file"))
 }

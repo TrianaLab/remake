@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/TrianaLab/remake/internal/util"
+	"github.com/TrianaLab/remake/internal/fetch"
 	"github.com/spf13/cobra"
 )
 
@@ -13,7 +13,7 @@ var (
 	pullFile       string
 	pullNoCache    bool
 	pullInsecure   bool
-	pullGetFetcher = util.GetFetcher
+	pullGetFetcher = fetch.GetFetcher
 )
 
 // pullCmd downloads a Makefile OCI artifact or HTTP URL.

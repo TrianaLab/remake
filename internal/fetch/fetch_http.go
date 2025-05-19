@@ -1,4 +1,4 @@
-package util
+package fetch
 
 import (
 	"crypto/sha256"
@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/TrianaLab/remake/config"
+	"github.com/spf13/viper"
 )
 
 // HTTPFetcher retrieves HTTP-hosted Makefiles, honoring cache if enabled.
@@ -25,7 +25,7 @@ func (h *HTTPFetcher) Fetch(url string, useCache bool) (string, error) {
 
 	// Not cached or cache disabled: proceed with download
 	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(url)))
-	dest := filepath.Join(config.GetCacheDir(), hash+".mk")
+	dest := filepath.Join(viper.GetString("cacheDir"), hash+".mk")
 
 	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
 		return "", err

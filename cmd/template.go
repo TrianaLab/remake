@@ -2,70 +2,39 @@ package cmd
 
 import (
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
 
-	"github.com/TrianaLab/remake/config"
-	"github.com/TrianaLab/remake/internal/run"
+	"github.com/TrianaLab/remake/internal/process"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var (
-	templateFile              string
-	templateNoCache           bool
-	templateDefaultMakefileFn = config.GetDefaultMakefile
-	cacheDirFn                = config.GetCacheDir
-	renderFn                  = run.Render
+	templateFile    string
+	templateNoCache bool
 )
 
-// templateCmd prints the fully-resolved Makefile without executing it.
+// templateCmd represents the template command
 var templateCmd = &cobra.Command{
-	Use:   "template",
-	Short: "Print the fully-resolved Makefile without executing it",
+	Use:   "template [flags]",
+	Short: "Print a Makefile with resolved includes",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// file to render
-		file := templateFile
-		if file == "" {
-			file = templateDefaultMakefileFn()
-			if file == "" {
-				return fmt.Errorf("no Makefile found; specify with -f flag")
+		// Determine source
+		src := templateFile
+		if src == "" {
+			src = viper.GetString("defaultMakefile")
+			if src == "" {
+				return fmt.Errorf("no Makefile specified; use -f flag or config")
 			}
 		}
-
-		// generate into cache
-		cacheDir := cacheDirFn()
-		out := filepath.Join(cacheDir, "Makefile.generated")
-		// ensure cache dir
-		if err := os.MkdirAll(cacheDir, 0755); err != nil {
-			return err
-		}
-
-		// render with includes resolved
-		if err := renderFn(file, out, !templateNoCache); err != nil {
-			return err
-		}
-
-		// open and copy to stdout
-		f, err := os.Open(out)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-
-		if _, err := io.Copy(os.Stdout, f); err != nil {
-			return err
-		}
-
-		// cleanup
-		_ = os.Remove(out)
-		return nil
+		// Execute
+		return process.Template(src, !templateNoCache)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(templateCmd)
-	templateCmd.Flags().StringVarP(&templateFile, "file", "f", "", "Makefile to render (default: detect makefile)")
-	templateCmd.Flags().BoolVar(&templateNoCache, "no-cache", false, "Skip cache")
+	templateCmd.Flags().StringVarP(&templateFile, "file", "f", "", "Makefile path or remote reference")
+	templateCmd.Flags().BoolVar(&templateNoCache, "no-cache", false, "disable cache")
+	viper.BindPFlag("defaultMakefile", templateCmd.Flags().Lookup("file"))
 }

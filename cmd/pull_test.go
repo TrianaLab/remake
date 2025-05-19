@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/TrianaLab/remake/internal/util"
+	"github.com/TrianaLab/remake/internal/fetch"
 )
 
-// fakeFetcher mocks util.Fetcher
+// fakeFetcher mocks fetch.Fetcher
 type fakeFetcher struct {
 	path string
 	err  error
@@ -34,7 +34,7 @@ func TestArgsValidation(t *testing.T) {
 func TestGetFetcherError(t *testing.T) {
 	orig := pullGetFetcher
 	defer func() { pullGetFetcher = orig }()
-	pullGetFetcher = func(ref string) (util.Fetcher, error) {
+	pullGetFetcher = func(ref string) (fetch.Fetcher, error) {
 		return nil, errors.New("bad fetcher")
 	}
 	err := pullCmd.RunE(pullCmd, []string{"any"})
@@ -46,7 +46,7 @@ func TestGetFetcherError(t *testing.T) {
 func TestFetchError(t *testing.T) {
 	orig := pullGetFetcher
 	defer func() { pullGetFetcher = orig }()
-	pullGetFetcher = func(ref string) (util.Fetcher, error) {
+	pullGetFetcher = func(ref string) (fetch.Fetcher, error) {
 		return &fakeFetcher{"", errors.New("fetch failed")}, nil
 	}
 	err := pullCmd.RunE(pullCmd, []string{"any"})
@@ -64,7 +64,7 @@ func TestCopyToFile(t *testing.T) {
 	outPath := tmp + "/out.mk"
 	orig := pullGetFetcher
 	defer func() { pullGetFetcher = orig }()
-	pullGetFetcher = func(ref string) (util.Fetcher, error) {
+	pullGetFetcher = func(ref string) (fetch.Fetcher, error) {
 		return &fakeFetcher{srcPath, nil}, nil
 	}
 	origFile := pullFile
@@ -86,7 +86,7 @@ func TestArtifactNotFoundError(t *testing.T) {
 	outPath := tmp + "/out.mk"
 	origFetcher := pullGetFetcher
 	defer func() { pullGetFetcher = origFetcher }()
-	pullGetFetcher = func(ref string) (util.Fetcher, error) {
+	pullGetFetcher = func(ref string) (fetch.Fetcher, error) {
 		return &fakeFetcher{"", nil}, nil
 	}
 	origFile := pullFile
@@ -107,7 +107,7 @@ func TestPrintSavedPath(t *testing.T) {
 
 	origFetcher := pullGetFetcher
 	defer func() { pullGetFetcher = origFetcher }()
-	pullGetFetcher = func(ref string) (util.Fetcher, error) {
+	pullGetFetcher = func(ref string) (fetch.Fetcher, error) {
 		return &fakeFetcher{srcPath, nil}, nil
 	}
 
@@ -136,7 +136,7 @@ func TestPrintSavedPath(t *testing.T) {
 func TestPrintFetchedCurrentDir(t *testing.T) {
 	origFetcher := pullGetFetcher
 	defer func() { pullGetFetcher = origFetcher }()
-	pullGetFetcher = func(ref string) (util.Fetcher, error) {
+	pullGetFetcher = func(ref string) (fetch.Fetcher, error) {
 		return &fakeFetcher{"", nil}, nil
 	}
 

@@ -1,125 +1,146 @@
 package cmd
 
 import (
-	"bytes"
-	"errors"
 	"os"
-	"strings"
+	"path/filepath"
 	"testing"
 
-	"github.com/spf13/pflag"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
-// restoreRunStubs resets package-level variables after tests
-func restoreRunStubs(origFile string, origNoCache bool, origDefault func() string, origRun func(string, []string, bool) error) {
-	runFile = origFile
-	runNoCache = origNoCache
-	runDefaultMakefileFn = origDefault
-	runFn = origRun
-}
+func TestRunCommand_Execute(t *testing.T) {
+	// Save original values to restore after tests
+	originalFile := runFile
+	originalNoCache := runNoCache
+	defer func() {
+		runFile = originalFile
+		runNoCache = originalNoCache
+		viper.Reset()
+	}()
 
-func TestRunCmd_WithFileFlag(t *testing.T) {
-	origFile, origNoCache := runFile, runNoCache
-	origDef, origRun := runDefaultMakefileFn, runFn
-	defer restoreRunStubs(origFile, origNoCache, origDef, origRun)
-
-	called := false
-	var gotFile string
-	var gotTargets []string
-	var gotCache bool
-
-	// stub runFn
-	runFn = func(f string, targets []string, useCache bool) error {
-		called = true
-		gotFile, gotTargets, gotCache = f, targets, useCache
-		return nil
+	// Create test directory and file
+	tmp := t.TempDir()
+	makeContent := "test:\n\techo test"
+	makePath := filepath.Join(tmp, "Makefile")
+	if err := os.WriteFile(makePath, []byte(makeContent), 0644); err != nil {
+		t.Fatal(err)
 	}
 
-	runFile = "Custom.mk"
-	runNoCache = true
+	tests := []struct {
+		name      string
+		args      []string
+		setupFunc func()
+		wantErr   bool
+	}{
+		{
+			name: "success with file flag",
+			args: []string{"test"},
+			setupFunc: func() {
+				runFile = makePath
+				runNoCache = false
+			},
+			wantErr: false,
+		},
+		{
+			name: "success with default configuration",
+			args: []string{"test"},
+			setupFunc: func() {
+				runFile = ""
+				runNoCache = false
+				viper.Set("defaultMakefile", makePath)
+			},
+			wantErr: false,
+		},
+		{
+			name: "error without specified file",
+			args: []string{"test"},
+			setupFunc: func() {
+				runFile = ""
+				runNoCache = false
+				viper.Reset()
+			},
+			wantErr: true,
+		},
+		{
+			name: "error with non-existent file",
+			args: []string{"test"},
+			setupFunc: func() {
+				runFile = "archivo_inexistente"
+				runNoCache = false
+			},
+			wantErr: true,
+		},
+		{
+			name: "with no-cache flag",
+			args: []string{"test"},
+			setupFunc: func() {
+				runFile = makePath
+				runNoCache = true
+			},
+			wantErr: false,
+		},
+		{
+			name: "without specified targets",
+			args: []string{},
+			setupFunc: func() {
+				runFile = makePath
+				runNoCache = false
+			},
+			wantErr: false,
+		},
+	}
 
-	buf := &bytes.Buffer{}
-	rootCmd.SetOut(buf)
-	rootCmd.SetErr(buf)
-	rootCmd.SetArgs([]string{"run", "-f", "Custom.mk", "--no-cache", "build", "test"})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			viper.Reset()
 
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	if !called {
-		t.Fatal("expected runFn to be called")
-	}
-	if gotFile != "Custom.mk" || strings.Join(gotTargets, ",") != "build,test" || gotCache {
-		t.Errorf("unexpected args: file=%q targets=%v cache=%v", gotFile, gotTargets, gotCache)
-	}
-}
+			// Setup test state
+			tt.setupFunc()
 
-func TestRunCmd_DefaultFileMissing(t *testing.T) {
-	origFile, origNoCache := runFile, runNoCache
-	origDef, origRun := runDefaultMakefileFn, runFn
-	defer restoreRunStubs(origFile, origNoCache, origDef, origRun)
+			cmd := &cobra.Command{}
+			err := runCmd.RunE(cmd, tt.args)
 
-	runFile = ""
-	runDefaultMakefileFn = func() string { return "" }
-	runNoCache = false
-
-	rootCmd.SetArgs([]string{"run", "build"})
-	err := rootCmd.Execute()
-	if err == nil || !strings.Contains(err.Error(), "no Makefile found; specify with -f") {
-		t.Fatalf("expected missing Makefile error, got %v", err)
-	}
-}
-
-func TestRunCmd_DefaultFileThenErrorAndSuccess(t *testing.T) {
-	origFile, origNoCache := runFile, runNoCache
-	origDef, origRun := runDefaultMakefileFn, runFn
-	defer restoreRunStubs(origFile, origNoCache, origDef, origRun)
-
-	dir := t.TempDir()
-	os.Chdir(dir)
-	const name = "Makefile"
-	if err := os.WriteFile(name, []byte("all:\n\techo hi\n"), 0644); err != nil {
-		t.Fatalf("write Makefile: %v", err)
-	}
-	runDefaultMakefileFn = func() string { return name }
-
-	// success
-	called := false
-	runFn = func(f string, targets []string, useCache bool) error {
-		called = true
-		return nil
-	}
-	rootCmd.SetArgs([]string{"run", "build"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("expected no error on success, got %v", err)
-	}
-	if !called {
-		t.Fatal("expected runFn called on success")
-	}
-
-	// error
-	runFn = func(f string, targets []string, useCache bool) error {
-		return errors.New("oops")
-	}
-	rootCmd.SetArgs([]string{"run", "build"})
-	err := rootCmd.Execute()
-	if err == nil || !strings.Contains(err.Error(), "oops") {
-		t.Fatalf("expected run error, got %v", err)
-	}
-}
-
-func TestNewRemakeCommand_ReturnsRootCmd(t *testing.T) {
-	cmd := NewRemakeCommand()
-	if cmd == nil {
-		t.Fatal("expected non-nil command from NewRemakeCommand")
-	}
-	if cmd.Use != "remake" {
-		t.Errorf("expected Use to be 'remake', got %q", cmd.Use)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("runCmd.Execute() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
 	}
 }
 
-func init() {
-	// reset flags for reuse
-	rootCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) { f.Changed = false })
-	runCmd.Flags().VisitAll(func(f *pflag.Flag) { f.Changed = false })
+func TestRunInit(t *testing.T) {
+	// Clean up viper state before and after test
+	viper.Reset()
+	defer viper.Reset()
+
+	// Test that the command is initialized correctly
+	if runCmd.Use != "run [flags] [targets]" {
+		t.Errorf("Expected Use to be 'run [flags] [targets]', got %s", runCmd.Use)
+	}
+
+	// Test flag registration
+	fileFlag := runCmd.Flags().Lookup("file")
+	if fileFlag == nil {
+		t.Error("file flag not registered")
+	}
+	if fileFlag.Shorthand != "f" {
+		t.Errorf("Expected shorthand for file flag to be 'f', got %s", fileFlag.Shorthand)
+	}
+
+	noCacheFlag := runCmd.Flags().Lookup("no-cache")
+	if noCacheFlag == nil {
+		t.Error("no-cache flag not registered")
+	}
+
+	// Test viper binding
+	err := viper.BindPFlag("defaultMakefile", runCmd.Flags().Lookup("file"))
+	if err != nil {
+		t.Errorf("Failed to bind flag to viper: %v", err)
+	}
+
+	// Set a value to verify binding
+	runCmd.Flags().Set("file", "test.mk")
+	if viper.GetString("defaultMakefile") != "test.mk" {
+		t.Error("defaultMakefile not properly bound to viper")
+	}
 }
