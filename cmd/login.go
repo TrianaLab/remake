@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 
 	"github.com/TrianaLab/remake/internal/registry"
@@ -29,9 +28,6 @@ These credentials are used by pull and push commands to authenticate.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		endpoint := args[0]
-		if !regexp.MustCompile(`^[A-Za-z0-9\.\-]+(?::[0-9]+)?$`).MatchString(endpoint) {
-			return fmt.Errorf("invalid registry %s", endpoint)
-		}
 		if loginUsername == "" {
 			fmt.Print("Username: ")
 			u, err := bufio.NewReader(os.Stdin).ReadString('\n')

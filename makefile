@@ -14,6 +14,7 @@ install: build
 	@echo "Installing remake to $(GOBIN)"
 	mkdir -p $(GOBIN)
 	mv bin/remake $(GOBIN)
+	rmdir bin
 
 test:
 	go test ./... -v

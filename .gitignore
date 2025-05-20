@@ -25,6 +25,5 @@ go.work.sum
 # env file
 .env
 
-# remake cache
-.remake/** */
-e2e-tests/.remake/** */
+# VSCode
+.vscode/
