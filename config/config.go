@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,35 +8,41 @@ import (
 	"github.com/spf13/viper"
 )
 
+var DefaultRegistry string
+
+func BaseDir() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".remake")
+}
+
+func ConfigFile() string {
+	return filepath.Join(BaseDir(), "config.yaml")
+}
+
 func InitConfig() error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("cannot find home directory: %w", err)
+	if err := os.MkdirAll(BaseDir(), 0o755); err != nil {
+		return err
 	}
-
-	remakeDir := filepath.Join(home, ".remake")
-	if err := os.MkdirAll(remakeDir, 0700); err != nil {
-		return fmt.Errorf("cannot create config directory: %w", err)
-	}
-
-	configFile := filepath.Join(remakeDir, "config.yaml")
-	viper.SetConfigFile(configFile)
+	viper.SetConfigFile(ConfigFile())
 	viper.SetConfigType("yaml")
 
-	viper.SetDefault("cacheDir", filepath.Join(remakeDir, "cache"))
+	viper.SetDefault("cacheDir", filepath.Join(BaseDir(), "cache"))
 	viper.SetDefault("defaultMakefile", "makefile")
 	viper.SetDefault("insecure", false)
+	viper.SetDefault("defaultRegistry", "ghcr.io")
 
-	if _, err := os.Stat(configFile); os.IsNotExist(err) {
-		if err := os.WriteFile(configFile, []byte("registries: {}\n"), 0600); err != nil {
-			return fmt.Errorf("cannot create default config: %w", err)
+	if _, err := os.Stat(ConfigFile()); os.IsNotExist(err) {
+		viper.Set("registries", map[string]interface{}{})
+		if err := viper.WriteConfigAs(ConfigFile()); err != nil {
+			return err
 		}
 	}
 
 	if err := viper.ReadInConfig(); err != nil {
-		return fmt.Errorf("error reading config file: %w", err)
+		return err
 	}
 
+	DefaultRegistry = viper.GetString("defaultRegistry")
 	return nil
 }
 

@@ -15,7 +15,6 @@ install: build
 	mkdir -p $(GOBIN)
 	mv bin/remake $(GOBIN)
 	rmdir bin
-	rm -rf $HOME/.remake
 
 test:
 	go test ./... -v

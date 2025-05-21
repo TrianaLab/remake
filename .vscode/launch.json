@@ -40,13 +40,12 @@
       "request": "launch",
       "mode": "debug",
       "program": "${workspaceFolder}/main.go",
-      "envFile": "${workspaceFolder}/.env",
       "args": [
         "login",
         "${input:loginRegistry}",
-        "--username",
+        "--user",
         "${input:loginUsername}",
-        "--password",
+        "--pass",
         "${input:loginPassword}",
       ]
     },
@@ -71,7 +70,6 @@
       "request": "launch",
       "mode": "debug",
       "program": "${workspaceFolder}/main.go",
-      "envFile": "${workspaceFolder}/.env",
       "args": [
         "pull",
         "${input:reference}",
@@ -83,7 +81,6 @@
       "request": "launch",
       "mode": "debug",
       "program": "${workspaceFolder}/main.go",
-      "envFile": "${workspaceFolder}/.env",
       "args": [
         "push",
         "${input:reference}",
@@ -97,7 +94,6 @@
       "request": "launch",
       "mode": "debug",
       "program": "${workspaceFolder}/main.go",
-      "envFile": "${workspaceFolder}/.env",
       "args": [
         "version"
       ]

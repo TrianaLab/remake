@@ -1,0 +1,43 @@
+classDiagram
+    direction LR
+
+    class CLI {
+        + loginCmd(ctx, user, pass)
+        + pushCmd(ctx, reference, path)
+        + pullCmd(ctx, reference)
+        + runCmd(ctx, reference, target)
+    }
+
+    class App {
+        + Login(ctx, user, pass) error
+        + Push(ctx, reference, path) error
+        + Pull(ctx, reference) (string, error)
+        + Run(ctx, reference, target) error
+    }
+
+    class ArtifactStore {
+        + Login(ctx, user, pass) error
+        + Push(ctx, reference, path) error
+        + Pull(ctx, reference) (string, error)
+    }
+
+    class OCIRepository {
+        + Login(ctx, user, pass) error
+        + Push(ctx, reference, path) error
+        + Pull(ctx, reference, dest) error
+    }
+
+    class CacheRepository {
+        + Push(ctx, reference, path) error
+        + Pull(ctx, reference) (string, error)
+    }
+
+    class ProcessRunner {
+        + Run(ctx, path, target) error
+    }
+
+    CLI         --> App             : llama a
+    App         --> ArtifactStore   : usa
+    App         --> ProcessRunner   : usa
+    ArtifactStore --> OCIRepository : delega en
+    ArtifactStore --> CacheRepository: delega en
