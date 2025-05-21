@@ -26,23 +26,22 @@ func NewDefaultClient(cfg *config.Config) Client {
 }
 
 // Login authenticates against cfg.DefaultRegistry, then saves credentials on success
-func (c *DefaultClient) Login(ctx context.Context, user, pass string) error {
-	def := c.cfg.DefaultRegistry
-	reg, err := remote.NewRegistry(def)
+func (c *DefaultClient) Login(ctx context.Context, registry, user, pass string) error {
+	reg, err := remote.NewRegistry(registry)
 	if err != nil {
 		return err
 	}
 	client := &auth.Client{
 		Client:     retry.DefaultClient,
 		Cache:      auth.NewCache(),
-		Credential: auth.StaticCredential(def, auth.Credential{Username: user, Password: pass}),
+		Credential: auth.StaticCredential(registry, auth.Credential{Username: user, Password: pass}),
 	}
 	reg.Client = client
 	if err := reg.Ping(ctx); err != nil {
 		return err
 	}
 	// persistir credenciales solo al autenticar correctamente
-	key := config.NormalizeKey(def)
+	key := config.NormalizeKey(registry)
 	viper.Set("registries."+key+".username", user)
 	viper.Set("registries."+key+".password", pass)
 	return viper.WriteConfig()

@@ -29,7 +29,7 @@ func main() {
 	a := app.New(store, runner)
 
 	// ejecutar CLI
-	if err := cmd.Execute(a); err != nil {
+	if err := cmd.Execute(a, cfg); err != nil {
 		log.Fatal(err)
 	}
 }

@@ -12,7 +12,7 @@ import (
 
 type (
 	OCIRepository interface {
-		Login(ctx context.Context, user, pass string) error
+		Login(ctx context.Context, registry, user, pass string) error
 		Push(ctx context.Context, reference, path string) error
 		Pull(ctx context.Context, reference, dest string) error
 	}
@@ -23,7 +23,7 @@ type (
 	}
 
 	ArtifactStore interface {
-		Login(ctx context.Context, user, pass string) error
+		Login(ctx context.Context, registry, user, pass string) error
 		Push(ctx context.Context, reference, path string) error
 		Pull(ctx context.Context, reference string) (string, error)
 	}
@@ -44,8 +44,8 @@ func NewDefaultArtifactStore(oci OCIRepository, cache CacheRepository, cfg *conf
 }
 
 // Login proxies to the OCI registry client
-func (s *DefaultArtifactStore) Login(ctx context.Context, user, pass string) error {
-	return s.oci.Login(ctx, user, pass)
+func (s *DefaultArtifactStore) Login(ctx context.Context, registry, user, pass string) error {
+	return s.oci.Login(ctx, registry, user, pass)
 }
 
 // Push uploads via OCI and then caches unless insecure

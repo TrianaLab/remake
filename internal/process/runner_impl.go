@@ -12,8 +12,8 @@ func NewExecRunner() Runner {
 	return &ExecRunner{}
 }
 
-func (r *ExecRunner) Run(ctx context.Context, path, target string) error {
-	cmd := exec.CommandContext(ctx, "make", target)
+func (r *ExecRunner) Run(ctx context.Context, path string, targets []string) error {
+	cmd := exec.CommandContext(ctx, "make", targets...)
 	cmd.Dir = path
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

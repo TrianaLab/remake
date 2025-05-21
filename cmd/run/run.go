@@ -23,12 +23,7 @@ func RunCmd(a *app.App, cfg *config.Config) *cobra.Command {
 		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg.NoCache = noCache
-			for _, target := range args {
-				if err := a.Run(context.Background(), file, target); err != nil {
-					return err
-				}
-			}
-			return nil
+			return a.Run(context.Background(), file, args)
 		},
 	}
 
