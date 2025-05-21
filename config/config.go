@@ -12,7 +12,6 @@ import (
 type Config struct {
 	CacheDir        string
 	DefaultMakefile string
-	Insecure        bool
 	DefaultRegistry string
 	Version         string
 	NoCache         bool
@@ -38,7 +37,6 @@ func InitConfig() (*Config, error) {
 	// valores por defecto
 	viper.SetDefault("cacheDir", filepath.Join(baseDir, "cache"))
 	viper.SetDefault("defaultMakefile", "makefile")
-	viper.SetDefault("insecure", false)
 	viper.SetDefault("defaultRegistry", "ghcr.io")
 	viper.SetDefault("version", "dev")
 	viper.SetDefault("noCache", false)
@@ -60,7 +58,6 @@ func InitConfig() (*Config, error) {
 	cfg := &Config{
 		CacheDir:        viper.GetString("cacheDir"),
 		DefaultMakefile: viper.GetString("defaultMakefile"),
-		Insecure:        viper.GetBool("insecure"),
 		DefaultRegistry: viper.GetString("defaultRegistry"),
 		Version:         viper.GetString("version"),
 		NoCache:         viper.GetBool("noCache"),

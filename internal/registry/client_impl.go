@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"os"
+	"path/filepath"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/spf13/viper"
@@ -81,19 +82,19 @@ func (c *DefaultClient) Push(ctx context.Context, reference, path string) error 
 	return nil
 }
 
-// Pull downloads an artifact from the reference into dest directory
-func (c *DefaultClient) Pull(ctx context.Context, reference, dest string) error {
+func (c *DefaultClient) Pull(ctx context.Context, reference string) (string, error) {
 	def := c.cfg.DefaultRegistry
+	// quitar cualquier prefijo oci:// si lo hay
 	ref, err := name.ParseReference(reference, name.WithDefaultRegistry(def))
 	if err != nil {
-		return err
+		return "", err
 	}
 	repoRef := ref.Context()
 	repo, err := remote.NewRepository(repoRef.RegistryStr() + "/" + repoRef.RepositoryStr())
 	if err != nil {
-		return err
+		return "", err
 	}
-	// aplicar credenciales si existen
+	// credenciales si existen
 	key := config.NormalizeKey(repoRef.RegistryStr())
 	user := viper.GetString("registries." + key + ".username")
 	pass := viper.GetString("registries." + key + ".password")
@@ -104,16 +105,26 @@ func (c *DefaultClient) Pull(ctx context.Context, reference, dest string) error 
 			Credential: auth.StaticCredential(repoRef.RegistryStr(), auth.Credential{Username: user, Password: pass}),
 		}
 	}
-	if err := os.MkdirAll(dest, 0o755); err != nil {
-		return err
-	}
-	fs, err := file.New(dest)
+
+	// creamos un fichero temporal para volcar el Makefile
+	tmp, err := os.CreateTemp("", filepath.Base(repoRef.RepositoryStr())+"-*")
 	if err != nil {
-		return err
+		return "", err
+	}
+	tmpPath := tmp.Name()
+	tmp.Close()
+
+	// usamos file.New apuntando al fichero
+	fs, err := file.New(tmpPath)
+	if err != nil {
+		return "", err
 	}
 	defer fs.Close()
+
+	// copiamos el blob con su Identifier() (tag o digest)
 	if _, err := oras.Copy(ctx, repo, ref.Identifier(), fs, ref.Identifier(), oras.DefaultCopyOptions); err != nil {
-		return err
+		return "", err
 	}
-	return nil
+
+	return tmpPath, nil
 }

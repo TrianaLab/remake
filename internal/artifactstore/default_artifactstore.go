@@ -14,7 +14,7 @@ type (
 	OCIRepository interface {
 		Login(ctx context.Context, registry, user, pass string) error
 		Push(ctx context.Context, reference, path string) error
-		Pull(ctx context.Context, reference, dest string) error
+		Pull(ctx context.Context, reference string) (string, error)
 	}
 
 	CacheRepository interface {
@@ -55,28 +55,30 @@ func (s *DefaultArtifactStore) Push(ctx context.Context, reference, path string)
 		return err
 	}
 	// cache only if not insecure
-	if !s.cfg.Insecure {
+	if !s.cfg.NoCache {
 		return s.cache.Push(ctx, reference, path)
 	}
 	return nil
 }
 
-// Pull tries cache first, then registry, and caches on success unless insecure
+// internal/artifactstore/default_artifactstore.go
 func (s *DefaultArtifactStore) Pull(ctx context.Context, reference string) (string, error) {
-	// if not insecure, attempt cache
-	if !s.cfg.Insecure {
+	// si no es insecure, probar cache primero
+	if !s.cfg.NoCache {
 		if path, err := s.cache.Pull(ctx, reference); err == nil {
 			return path, nil
 		}
 	}
-	// fetch from registry
-	dest := reference
-	if err := s.oci.Pull(ctx, reference, dest); err != nil {
+
+	// tiramos contra el registry y recibimos path al fichero
+	filePath, err := s.oci.Pull(ctx, reference)
+	if err != nil {
 		return "", err
 	}
-	// cache fetched artifact if not insecure
-	if !s.cfg.Insecure {
-		_ = s.cache.Push(ctx, reference, dest)
+
+	// cachear si procede
+	if !s.cfg.NoCache {
+		_ = s.cache.Push(ctx, reference, filePath)
 	}
-	return dest, nil
+	return filePath, nil
 }
