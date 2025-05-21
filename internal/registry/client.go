@@ -2,14 +2,11 @@ package registry
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 
 	"github.com/google/go-containerregistry/pkg/name"
 
 	"github.com/spf13/viper"
 	"oras.land/oras-go/v2"
-	"oras.land/oras-go/v2/content"
 	"oras.land/oras-go/v2/content/file"
 	"oras.land/oras-go/v2/content/memory"
 	"oras.land/oras-go/v2/registry/remote"
@@ -114,30 +111,31 @@ func (c *DefaultClient) Pull(ctx context.Context, reference string) ([]byte, err
 	if _, err := oras.Copy(ctx, repo, ref.Identifier(), store, ref.Identifier(), oras.DefaultCopyOptions); err != nil {
 		return nil, err
 	}
+	/*
+		manifestDesc, err := store.Resolve(ctx, ref.Identifier())
+		if err != nil {
+			return nil, err
+		}
 
-	manifestDesc, err := store.Resolve(ctx, ref.Identifier())
-	if err != nil {
-		return nil, err
-	}
+		manifestBytes, err := content.FetchAll(ctx, store.Fetch(ctx, ref.Identifier()), manifestDesc)
+		if err != nil {
+			return nil, err
+		}
 
-	manifestBytes, err := content.FetchAll(ctx, store.Fetch(ctx, ref.Identifier()), manifestDesc)
-	if err != nil {
-		return nil, err
-	}
+		var manifest ocispec.Manifest
+		if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+			return nil, err
+		}
+		if len(manifest.Layers) == 0 {
+			return nil, fmt.Errorf("no layers found in artifact %s", reference)
+		}
 
-	var manifest ocispec.Manifest
-	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
-		return nil, err
-	}
-	if len(manifest.Layers) == 0 {
-		return nil, fmt.Errorf("no layers found in artifact %s", reference)
-	}
+		layerDesc := manifest.Layers[0]
+		data, err := content.FetchAll(ctx, store, layerDesc)
+		if err != nil {
+			return nil, err
+		}
 
-	layerDesc := manifest.Layers[0]
-	data, err := content.FetchAll(ctx, store, layerDesc)
-	if err != nil {
-		return nil, err
-	}
-
-	return data, nil
+		return data, nil*/
+	return nil, nil
 }
