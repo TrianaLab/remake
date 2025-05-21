@@ -7,26 +7,23 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/spf13/viper"
-
 	"github.com/TrianaLab/remake/config"
+	"github.com/google/go-containerregistry/pkg/name"
 )
 
+// LocalCache implements CacheRepository using filesystem under cacheDir
 type LocalCache struct {
-	dir string
+	cfg *config.Config
 }
 
-func NewLocalCache(_ string) CacheRepository {
-	if err := config.InitConfig(); err != nil {
-		panic(err)
-	}
-	dir := viper.GetString("cacheDir")
-	return &LocalCache{dir: dir}
+// NewLocalCache returns a filesystem cache, using cacheDir from configuration
+func NewLocalCache(cfg *config.Config) CacheRepository {
+	return &LocalCache{cfg: cfg}
 }
 
+// Push stores the referenced file into cache
 func (c *LocalCache) Push(ctx context.Context, reference, path string) error {
-	cacheFile, err := cachePath(c.dir, reference)
+	cacheFile, err := cachePath(c.cfg.CacheDir, reference)
 	if err != nil {
 		return err
 	}
@@ -51,8 +48,9 @@ func (c *LocalCache) Push(ctx context.Context, reference, path string) error {
 	return nil
 }
 
+// Pull retrieves the cached file path for the reference
 func (c *LocalCache) Pull(ctx context.Context, reference string) (string, error) {
-	cacheFile, err := cachePath(c.dir, reference)
+	cacheFile, err := cachePath(c.cfg.CacheDir, reference)
 	if err != nil {
 		return "", err
 	}

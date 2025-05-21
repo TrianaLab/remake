@@ -13,20 +13,22 @@ import (
 )
 
 func main() {
-	// Inicializar configuración global
-	if err := config.InitConfig(); err != nil {
+	// inicializar configuración centralizada
+	cfg, err := config.InitConfig()
+	if err != nil {
 		log.Fatal(err)
 	}
-	// Crear cliente de registry y repositorio de cache
-	regClient := registry.NewDefaultClient()
-	cacheRepo := cache.NewLocalCache(config.BaseDir())
 
-	// Crear ArtifactStore y ProcessRunner
-	store := artifactstore.NewDefaultArtifactStore(regClient, cacheRepo)
+	// crear cliente OCI y repositorio de cache con cfg tipado
+	regClient := registry.NewDefaultClient(cfg)
+	cacheRepo := cache.NewLocalCache(cfg)
+
+	// componer store y runner
+	store := artifactstore.NewDefaultArtifactStore(regClient, cacheRepo, cfg)
 	runner := process.NewExecRunner()
 	a := app.New(store, runner)
 
-	// Ejecutar comando CLI
+	// ejecutar CLI
 	if err := cmd.Execute(a); err != nil {
 		log.Fatal(err)
 	}

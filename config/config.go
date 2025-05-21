@@ -8,48 +8,72 @@ import (
 	"github.com/spf13/viper"
 )
 
-var DefaultRegistry string
-
-func BaseDir() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".remake")
+// Config almacena la configuración de Remake
+type Config struct {
+	CacheDir        string
+	DefaultMakefile string
+	Insecure        bool
+	DefaultRegistry string
+	Version         string
+	NoCache         bool
 }
 
-func ConfigFile() string {
-	return filepath.Join(BaseDir(), "config.yaml")
-}
-
-func InitConfig() error {
-	if err := os.MkdirAll(BaseDir(), 0o755); err != nil {
-		return err
+// InitConfig prepara Viper, establece defaults y carga el archivo de configuración
+func InitConfig() (*Config, error) {
+	// determinar directorio base ~/.remake
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
 	}
-	viper.SetConfigFile(ConfigFile())
+	baseDir := filepath.Join(home, ".remake")
+	if err := os.MkdirAll(baseDir, 0o755); err != nil {
+		return nil, err
+	}
+
+	// configurar Viper para usar ~/.remake/config.yaml
+	configFile := filepath.Join(baseDir, "config.yaml")
+	viper.SetConfigFile(configFile)
 	viper.SetConfigType("yaml")
 
-	viper.SetDefault("cacheDir", filepath.Join(BaseDir(), "cache"))
+	// valores por defecto
+	viper.SetDefault("cacheDir", filepath.Join(baseDir, "cache"))
 	viper.SetDefault("defaultMakefile", "makefile")
 	viper.SetDefault("insecure", false)
 	viper.SetDefault("defaultRegistry", "ghcr.io")
+	viper.SetDefault("version", "dev")
+	viper.SetDefault("noCache", false)
 
-	if _, err := os.Stat(ConfigFile()); os.IsNotExist(err) {
+	// inicializar archivo if no existe
+	if _, err := os.Stat(configFile); os.IsNotExist(err) {
 		viper.Set("registries", map[string]interface{}{})
-		if err := viper.WriteConfigAs(ConfigFile()); err != nil {
-			return err
+		if err := viper.WriteConfigAs(configFile); err != nil {
+			return nil, err
 		}
 	}
 
+	// leer configuración
 	if err := viper.ReadInConfig(); err != nil {
-		return err
+		return nil, err
 	}
 
-	DefaultRegistry = viper.GetString("defaultRegistry")
-	return nil
+	// mapear en struct
+	cfg := &Config{
+		CacheDir:        viper.GetString("cacheDir"),
+		DefaultMakefile: viper.GetString("defaultMakefile"),
+		Insecure:        viper.GetBool("insecure"),
+		DefaultRegistry: viper.GetString("defaultRegistry"),
+		Version:         viper.GetString("version"),
+		NoCache:         viper.GetBool("noCache"),
+	}
+	return cfg, nil
 }
 
+// SaveConfig persiste los cambios en config.yaml
 func SaveConfig() error {
 	return viper.WriteConfig()
 }
 
+// NormalizeKey reemplaza puntos por guiones bajos en un endpoint
 func NormalizeKey(endpoint string) string {
 	return strings.ReplaceAll(endpoint, ".", "_")
 }

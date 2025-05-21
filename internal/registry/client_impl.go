@@ -16,26 +16,28 @@ import (
 )
 
 // DefaultClient interacts with an OCI registry using ORAS
-type DefaultClient struct{}
-
-// NewDefaultClient returns a new registry Client
-func NewDefaultClient() Client {
-	return &DefaultClient{}
+type DefaultClient struct {
+	cfg *config.Config
 }
 
-// Login authenticates against the default registry, then saves credentials on success
+// NewDefaultClient returns a new registry Client configured by cfg
+func NewDefaultClient(cfg *config.Config) Client {
+	return &DefaultClient{cfg: cfg}
+}
+
+// Login authenticates against cfg.DefaultRegistry, then saves credentials on success
 func (c *DefaultClient) Login(ctx context.Context, user, pass string) error {
-	def := config.DefaultRegistry
+	def := c.cfg.DefaultRegistry
 	reg, err := remote.NewRegistry(def)
 	if err != nil {
 		return err
 	}
-	repoClient := &auth.Client{
+	client := &auth.Client{
 		Client:     retry.DefaultClient,
 		Cache:      auth.NewCache(),
 		Credential: auth.StaticCredential(def, auth.Credential{Username: user, Password: pass}),
 	}
-	reg.Client = repoClient
+	reg.Client = client
 	if err := reg.Ping(ctx); err != nil {
 		return err
 	}
@@ -43,12 +45,12 @@ func (c *DefaultClient) Login(ctx context.Context, user, pass string) error {
 	key := config.NormalizeKey(def)
 	viper.Set("registries."+key+".username", user)
 	viper.Set("registries."+key+".password", pass)
-	return config.SaveConfig()
+	return viper.WriteConfig()
 }
 
 // Push uploads an artifact at path to the given reference
 func (c *DefaultClient) Push(ctx context.Context, reference, path string) error {
-	def := config.DefaultRegistry
+	def := c.cfg.DefaultRegistry
 	ref, err := name.ParseReference(reference, name.WithDefaultRegistry(def))
 	if err != nil {
 		return err
@@ -82,7 +84,7 @@ func (c *DefaultClient) Push(ctx context.Context, reference, path string) error 
 
 // Pull downloads an artifact from the reference into dest directory
 func (c *DefaultClient) Pull(ctx context.Context, reference, dest string) error {
-	def := config.DefaultRegistry
+	def := c.cfg.DefaultRegistry
 	ref, err := name.ParseReference(reference, name.WithDefaultRegistry(def))
 	if err != nil {
 		return err

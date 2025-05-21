@@ -8,6 +8,7 @@ require (
 	github.com/google/go-containerregistry v0.20.4
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.20.1
+	golang.org/x/term v0.32.0
 	oras.land/oras-go/v2 v2.6.0
 )
 
