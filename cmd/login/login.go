@@ -13,7 +13,7 @@ import (
 	"golang.org/x/term"
 )
 
-func LoginCmd(a *app.App, cfg *config.Config) *cobra.Command {
+func LoginCmd(cfg *config.Config) *cobra.Command {
 	var (
 		usernameFlag string
 		passwordFlag string
@@ -25,12 +25,12 @@ func LoginCmd(a *app.App, cfg *config.Config) *cobra.Command {
 		Example: "  remake login ghcr.io -u myuser -p mypass\n  remake login             # toma defaultRegistry y pide credenciales si hacen falta",
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// 1) elegir registry
+			// Choose registry
 			registry := cfg.DefaultRegistry
 			if len(args) == 1 {
 				registry = args[0]
 			}
-			// 2) credenciales desde flags o config
+			// Credentials from config
 			user := usernameFlag
 			pass := passwordFlag
 			if user == "" || pass == "" {
@@ -42,7 +42,7 @@ func LoginCmd(a *app.App, cfg *config.Config) *cobra.Command {
 					pass = viper.GetString("registries." + key + ".password")
 				}
 			}
-			// 3) si siguen vacías, pedir interactivamente
+			// If config credentials are empty, request them
 			if user == "" {
 				fmt.Fprint(os.Stderr, "Username: ")
 				fmt.Scanln(&user)
@@ -56,11 +56,11 @@ func LoginCmd(a *app.App, cfg *config.Config) *cobra.Command {
 				}
 				pass = string(bytePass)
 			}
-			// 4) invocar login
-			if err := a.Login(context.Background(), registry, user, pass); err != nil {
+			// Run login
+			if err := app.New(cfg).Login(context.Background(), registry, user, pass); err != nil {
 				return err
 			}
-			// 5) reporte exitoso
+			// Output
 			fmt.Println("Login succeeded ✅")
 			return nil
 		},

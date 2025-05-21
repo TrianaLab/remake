@@ -1,15 +1,23 @@
-package process
+package run
 
 import (
 	"context"
 	"os"
 	"os/exec"
+
+	"github.com/TrianaLab/remake/config"
 )
 
-type ExecRunner struct{}
+type Runner interface {
+	Run(ctx context.Context, path string, targets []string) error
+}
 
-func NewExecRunner() Runner {
-	return &ExecRunner{}
+type ExecRunner struct {
+	cfg *config.Config
+}
+
+func New(cfg *config.Config) Runner {
+	return &ExecRunner{cfg: cfg}
 }
 
 func (r *ExecRunner) Run(ctx context.Context, path string, targets []string) error {

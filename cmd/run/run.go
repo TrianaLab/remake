@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func RunCmd(a *app.App, cfg *config.Config) *cobra.Command {
+func RunCmd(cfg *config.Config) *cobra.Command {
 	var (
 		noCache bool
 		file    string
@@ -23,7 +23,7 @@ func RunCmd(a *app.App, cfg *config.Config) *cobra.Command {
 		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg.NoCache = noCache
-			return a.Run(context.Background(), file, args)
+			return app.New(cfg).Run(context.Background(), file, args)
 		},
 	}
 

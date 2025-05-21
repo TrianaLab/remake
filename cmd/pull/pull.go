@@ -3,15 +3,13 @@ package pull
 
 import (
 	"context"
-	"fmt"
-	"os"
 
 	"github.com/TrianaLab/remake/app"
 	"github.com/TrianaLab/remake/config"
 	"github.com/spf13/cobra"
 )
 
-func PullCmd(a *app.App, cfg *config.Config) *cobra.Command {
+func PullCmd(cfg *config.Config) *cobra.Command {
 	var noCache bool
 
 	cmd := &cobra.Command{
@@ -22,20 +20,8 @@ func PullCmd(a *app.App, cfg *config.Config) *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ref := args[0]
-			// seteo de bypass de cache
 			cfg.NoCache = noCache
-			// obtenemos ruta local (o descargamos)
-			path, err := a.Pull(context.Background(), ref)
-			if err != nil {
-				return err
-			}
-			// leemos y volcamos contenido
-			data, err := os.ReadFile(path)
-			if err != nil {
-				return err
-			}
-			fmt.Print(string(data))
-			return nil
+			return app.New(cfg).Pull(context.Background(), ref)
 		},
 	}
 

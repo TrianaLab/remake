@@ -1,7 +1,8 @@
 package cmd
 
 import (
-	"github.com/TrianaLab/remake/app"
+	"log"
+
 	"github.com/TrianaLab/remake/cmd/login"
 	"github.com/TrianaLab/remake/cmd/pull"
 	"github.com/TrianaLab/remake/cmd/push"
@@ -16,12 +17,18 @@ var rootCmd = &cobra.Command{
 	Short: "Remake CLI",
 }
 
-func Execute(a *app.App, cfg *config.Config) error {
+func Execute() error {
+
+	cfg, err := config.InitConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	rootCmd.AddCommand(
-		login.LoginCmd(a, cfg),
-		push.PushCmd(a, cfg),
-		pull.PullCmd(a, cfg),
-		run.RunCmd(a, cfg),
+		login.LoginCmd(cfg),
+		push.PushCmd(cfg),
+		pull.PullCmd(cfg),
+		run.RunCmd(cfg),
 		version.VersionCmd(cfg),
 	)
 	return rootCmd.Execute()

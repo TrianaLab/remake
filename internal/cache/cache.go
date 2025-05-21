@@ -3,7 +3,6 @@ package cache
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 
@@ -11,18 +10,20 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 )
 
-// LocalCache implements CacheRepository using filesystem under cacheDir
+type CacheRepository interface {
+	Push(ctx context.Context, reference string, data []byte) error
+	Pull(ctx context.Context, reference string) (string, error)
+}
+
 type LocalCache struct {
 	cfg *config.Config
 }
 
-// NewLocalCache returns a filesystem cache, using cacheDir from configuration
-func NewLocalCache(cfg *config.Config) CacheRepository {
+func New(cfg *config.Config) CacheRepository {
 	return &LocalCache{cfg: cfg}
 }
 
-// Push stores the referenced file into cache
-func (c *LocalCache) Push(ctx context.Context, reference, path string) error {
+func (c *LocalCache) Push(ctx context.Context, reference string, data []byte) error {
 	cacheFile, err := cachePath(c.cfg.CacheDir, reference)
 	if err != nil {
 		return err
@@ -30,32 +31,16 @@ func (c *LocalCache) Push(ctx context.Context, reference, path string) error {
 	if err := os.MkdirAll(filepath.Dir(cacheFile), 0o755); err != nil {
 		return err
 	}
-	src, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer src.Close()
-
-	dst, err := os.Create(cacheFile)
-	if err != nil {
-		return err
-	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, src); err != nil {
-		return err
-	}
-	return nil
+	return os.WriteFile(cacheFile, data, 0o644)
 }
 
-// Pull retrieves the cached file path for the reference
 func (c *LocalCache) Pull(ctx context.Context, reference string) (string, error) {
 	cacheFile, err := cachePath(c.cfg.CacheDir, reference)
 	if err != nil {
 		return "", err
 	}
 	if _, err := os.Stat(cacheFile); err != nil {
-		return "", fmt.Errorf("cache miss for %s: %w", reference, err)
+		return "", err
 	}
 	return cacheFile, nil
 }
