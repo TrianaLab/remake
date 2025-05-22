@@ -36,6 +36,15 @@ import (
 	"github.com/TrianaLab/remake/config"
 )
 
+// These vars allows us to override functions in tests.
+var (
+	createFile = os.Create
+	copyData   = io.Copy
+	closeFile  = func(f *os.File) error { return f.Close() }
+	symlink    = os.Symlink
+	readLink   = os.Readlink
+)
+
 // HTTPCache implements CacheRepository for HTTP(S) references.
 // It stores blobs under a directory structure based on the URL host and path,
 // using SHA-256 digests for content addressing and symbolic links for references.
@@ -68,15 +77,15 @@ func (c *HTTPCache) Push(ctx context.Context, reference string, data []byte) err
 	}
 	blobPath := filepath.Join(blobDir, digest)
 	tmp := blobPath + ".tmp"
-	f, err := os.Create(tmp)
+	f, err := createFile(tmp)
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(f, bytes.NewReader(data)); err != nil {
+	if _, err := copyData(f, bytes.NewReader(data)); err != nil {
 		f.Close()
 		return err
 	}
-	if err := f.Close(); err != nil {
+	if err := closeFile(f); err != nil {
 		return err
 	}
 	if err := os.Rename(tmp, blobPath); err != nil {
@@ -92,7 +101,7 @@ func (c *HTTPCache) Push(ctx context.Context, reference string, data []byte) err
 	if err := os.Remove(latest); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	if err := os.Symlink(blobPath, latest); err != nil {
+	if err := symlink(blobPath, latest); err != nil {
 		return err
 	}
 	return nil
@@ -114,7 +123,7 @@ func (c *HTTPCache) Pull(ctx context.Context, reference string) (string, error) 
 	if err != nil || info.Mode()&os.ModeSymlink == 0 {
 		return "", fmt.Errorf("cache miss for %s", reference)
 	}
-	target, err := os.Readlink(link)
+	target, err := readLink(link)
 	if err != nil {
 		return "", err
 	}
