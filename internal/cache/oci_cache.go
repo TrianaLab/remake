@@ -27,7 +27,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,8 +51,11 @@ func NewOCIRepository(cfg *config.Config) CacheRepository {
 // It parses the reference (with default registry), computes SHA-256 digest,
 // writes the blob under 'cacheDir/registry/repo/blobs', and symlinks under 'refs/<tag|digest>'.
 func (c *OCIRepository) Push(ctx context.Context, reference string, data []byte) error {
+	if strings.Contains(reference, "://") && !strings.HasPrefix(reference, "oci://") {
+		return fmt.Errorf("invalid OCI reference: %s", reference)
+	}
 	raw := strings.TrimPrefix(reference, "oci://")
-	ref, err := name.ParseReference(raw, name.WithDefaultRegistry(c.cfg.DefaultRegistry))
+	ref, err := parseRef(raw, name.WithDefaultRegistry(c.cfg.DefaultRegistry))
 	if err != nil {
 		return err
 	}
@@ -64,42 +66,42 @@ func (c *OCIRepository) Push(ctx context.Context, reference string, data []byte)
 
 	// Blob directory
 	blobDir := filepath.Join(c.cfg.CacheDir, domain, repo, "blobs")
-	if err := os.MkdirAll(blobDir, 0o755); err != nil {
+	if err := mkdirAll(blobDir, 0o755); err != nil {
 		return err
 	}
 
 	// Write to temp file then atomically rename
 	blobPath := filepath.Join(blobDir, digest)
 	tmpPath := blobPath + ".tmp"
-	f, err := os.Create(tmpPath)
+	f, err := createFile(tmpPath)
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(f, bytes.NewReader(data)); err != nil {
+	if _, err := copyData(f, bytes.NewReader(data)); err != nil {
 		f.Close()
 		return err
 	}
-	if err := f.Close(); err != nil {
+	if err := closeFile(f); err != nil {
 		return err
 	}
-	if err := os.Rename(tmpPath, blobPath); err != nil {
+	if err := renameFile(tmpPath, blobPath); err != nil {
 		return err
 	}
 
 	// Refs directory
 	refDir := filepath.Join(c.cfg.CacheDir, domain, repo, "refs")
-	if err := os.MkdirAll(refDir, 0o755); err != nil {
+	if err := mkdirAll(refDir, 0o755); err != nil {
 		return err
 	}
 
 	// Remove existing tag symlink, ignoring "not exist"
 	tagPath := filepath.Join(refDir, ref.Identifier())
-	if err := os.Remove(tagPath); err != nil && !os.IsNotExist(err) {
+	if err := removePath(tagPath); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 
 	// Create new symlink
-	if err := os.Symlink(blobPath, tagPath); err != nil {
+	if err := symlinkPath(blobPath, tagPath); err != nil {
 		return err
 	}
 
@@ -110,7 +112,11 @@ func (c *OCIRepository) Push(ctx context.Context, reference string, data []byte)
 // It looks for a symlink under 'refs/<identifier>' first. If missing and the reference
 // is a digest, it checks the blob directly. Returns an error on cache miss.
 func (c *OCIRepository) Pull(ctx context.Context, reference string) (string, error) {
+	if strings.Contains(reference, "://") && !strings.HasPrefix(reference, "oci://") {
+		return "", fmt.Errorf("invalid OCI reference: %s", reference)
+	}
 	raw := strings.TrimPrefix(reference, "oci://")
+
 	ref, err := name.ParseReference(raw, name.WithDefaultRegistry(c.cfg.DefaultRegistry))
 	if err != nil {
 		return "", err

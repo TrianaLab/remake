@@ -27,22 +27,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/TrianaLab/remake/config"
-)
-
-// These vars allows us to override functions in tests.
-var (
-	createFile = os.Create
-	copyData   = io.Copy
-	closeFile  = func(f *os.File) error { return f.Close() }
-	symlink    = os.Symlink
-	readLink   = os.Readlink
 )
 
 // HTTPCache implements CacheRepository for HTTP(S) references.

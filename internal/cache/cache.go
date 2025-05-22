@@ -23,8 +23,25 @@ package cache
 
 import (
 	"context"
+	"io"
+	"os"
 
 	"github.com/TrianaLab/remake/config"
+	"github.com/google/go-containerregistry/pkg/name"
+)
+
+// These vars allows us to override functions in tests.
+var (
+	parseRef    = name.ParseReference
+	mkdirAll    = os.MkdirAll
+	renameFile  = os.Rename
+	removePath  = os.Remove
+	symlinkPath = os.Symlink
+	createFile  = os.Create
+	copyData    = io.Copy
+	closeFile   = func(f *os.File) error { return f.Close() }
+	symlink     = os.Symlink
+	readLink    = os.Readlink
 )
 
 // CacheRepository defines the interface for caching Makefile artifacts.

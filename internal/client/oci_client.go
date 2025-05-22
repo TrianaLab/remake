@@ -78,6 +78,9 @@ func (c *OCIClient) Login(ctx context.Context, registry, user, pass string) erro
 // Push uploads the local file at path as an OCI artifact to the given reference.
 // It tags the artifact with the reference identifier and pushes it to the remote repository.
 func (c *OCIClient) Push(ctx context.Context, reference, path string) error {
+	if strings.Contains(reference, "://") && !strings.HasPrefix(reference, "oci://") {
+		return fmt.Errorf("invalid OCI reference: %s", reference)
+	}
 	raw := strings.TrimPrefix(reference, "oci://")
 	ref, err := name.ParseReference(raw, name.WithDefaultRegistry(c.cfg.DefaultRegistry))
 	if err != nil {
@@ -141,7 +144,11 @@ func (c *OCIClient) Push(ctx context.Context, reference, path string) error {
 // Pull downloads the artifact data for the given reference from the OCI registry.
 // It retrieves the manifest and returns the contents of the first layer (Makefile data).
 func (c *OCIClient) Pull(ctx context.Context, reference string) ([]byte, error) {
+	if strings.Contains(reference, "://") && !strings.HasPrefix(reference, "oci://") {
+		return []byte{}, fmt.Errorf("invalid OCI reference: %s", reference)
+	}
 	raw := strings.TrimPrefix(reference, "oci://")
+
 	ref, err := name.ParseReference(raw, name.WithDefaultRegistry(c.cfg.DefaultRegistry))
 	if err != nil {
 		return nil, err
