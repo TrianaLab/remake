@@ -71,10 +71,13 @@ type Config struct {
 	NoCache bool
 }
 
+// userHomeDir allows us to override os.UserHomeDir in tests.
+var userHomeDir = os.UserHomeDir
+
 // InitConfig initializes directory structure and loads configuration from
 // ~/.remake/config.yaml, applying defaults for all settings.
 func InitConfig() (*Config, error) {
-	home, err := os.UserHomeDir()
+	home, err := userHomeDir()
 	if err != nil {
 		return nil, err
 	}
@@ -130,9 +133,6 @@ func (c *Config) ParseReference(ref string) ReferenceType {
 		return ReferenceHTTP
 	}
 	if _, err := os.Stat(ref); err == nil {
-		return ReferenceLocal
-	}
-	if _, err := os.Stat("./" + ref); err == nil {
 		return ReferenceLocal
 	}
 	return ReferenceOCI

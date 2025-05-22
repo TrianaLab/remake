@@ -22,6 +22,7 @@
 package config
 
 import (
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -219,5 +220,22 @@ func TestNormalizeKey(t *testing.T) {
 	out := NormalizeKey("a.b.c")
 	if out != "a_b_c" {
 		t.Errorf("unexpected normalize: got %q want %q", out, "a_b_c")
+	}
+}
+
+// TestInitConfigUserHomeDirError covers the error return path of os.UserHomeDir.
+func TestInitConfigUserHomeDirError(t *testing.T) {
+	viper.Reset()
+
+	// Mock the home-dir call to always error
+	orig := userHomeDir
+	userHomeDir = func() (string, error) {
+		return "", errors.New("cannot get home")
+	}
+	defer func() { userHomeDir = orig }()
+
+	os.Setenv("HOME", "/some/where") // no effect, uso mock
+	if _, err := InitConfig(); err == nil {
+		t.Fatal("expected InitConfig to return error when UserHomeDir fails")
 	}
 }
