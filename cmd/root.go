@@ -30,5 +30,8 @@ func Execute() error {
 		versionCmd(a),
 		configCmd(a),
 	)
+
+	rootCmd.SilenceUsage = true
+
 	return rootCmd.Execute()
 }

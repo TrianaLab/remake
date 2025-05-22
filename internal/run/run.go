@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"os/exec"
-	"path/filepath"
 
 	"github.com/TrianaLab/remake/config"
 )
@@ -26,7 +25,6 @@ func (r *ExecRunner) Run(ctx context.Context, path string, makeFlags, targets []
 	args = append(args, makeFlags...)
 	args = append(args, targets...)
 	cmd := exec.CommandContext(ctx, "make", args...)
-	cmd.Dir = filepath.Dir(path)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
