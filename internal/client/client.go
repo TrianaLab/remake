@@ -19,7 +19,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // THE SOFTWARE.
 
-package registry
+package client
 
 import (
 	"context"

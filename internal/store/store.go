@@ -28,7 +28,7 @@ import (
 
 	"github.com/TrianaLab/remake/config"
 	"github.com/TrianaLab/remake/internal/cache"
-	"github.com/TrianaLab/remake/internal/registry"
+	"github.com/TrianaLab/remake/internal/client"
 )
 
 // Store defines the interface for login, push, and pull operations
@@ -58,7 +58,7 @@ func New(cfg *config.Config) Store {
 
 // Login authenticates to the remote registry using the configured registry client.
 func (s *ArtifactStore) Login(ctx context.Context, reg, user, pass string) error {
-	client := registry.NewClient(s.cfg, reg)
+	client := client.NewClient(s.cfg, reg)
 	return client.Login(ctx, reg, user, pass)
 }
 
@@ -72,7 +72,7 @@ func (s *ArtifactStore) Push(ctx context.Context, reference, path string) error 
 	case config.ReferenceLocal:
 		return fmt.Errorf("pushing local references is not supported")
 	case config.ReferenceOCI:
-		client := registry.NewClient(s.cfg, reference)
+		client := client.NewClient(s.cfg, reference)
 		if err := client.Push(ctx, reference, path); err != nil {
 			return err
 		}
@@ -105,7 +105,7 @@ func (s *ArtifactStore) Pull(ctx context.Context, reference string) (string, err
 			}
 		}
 		// Fetch from remote registry
-		client := registry.NewClient(s.cfg, reference)
+		client := client.NewClient(s.cfg, reference)
 		data, err := client.Pull(ctx, reference)
 		if err != nil {
 			return "", err
