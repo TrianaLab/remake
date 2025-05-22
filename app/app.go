@@ -70,10 +70,10 @@ func (a *App) Pull(ctx context.Context, reference string) error {
 	return nil
 }
 
-func (a *App) Run(ctx context.Context, reference string, targets []string) error {
+func (a *App) Run(ctx context.Context, reference string, makeFlags, targets []string) error {
 	path, err := a.store.Pull(ctx, reference)
 	if err != nil {
 		return err
 	}
-	return a.runner.Run(ctx, path, targets)
+	return a.runner.Run(ctx, path, makeFlags, targets)
 }

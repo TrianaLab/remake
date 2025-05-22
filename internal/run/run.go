@@ -10,7 +10,7 @@ import (
 )
 
 type Runner interface {
-	Run(ctx context.Context, path string, targets []string) error
+	Run(ctx context.Context, path string, makeFlags, targets []string) error
 }
 
 type ExecRunner struct {
@@ -21,9 +21,11 @@ func New(cfg *config.Config) Runner {
 	return &ExecRunner{cfg: cfg}
 }
 
-func (r *ExecRunner) Run(ctx context.Context, path string, targets []string) error {
-	cmd := exec.CommandContext(ctx, "make", "-f", path)
-	cmd.Args = append(cmd.Args, targets...)
+func (r *ExecRunner) Run(ctx context.Context, path string, makeFlags, targets []string) error {
+	args := []string{"-f", path}
+	args = append(args, makeFlags...)
+	args = append(args, targets...)
+	cmd := exec.CommandContext(ctx, "make", args...)
 	cmd.Dir = filepath.Dir(path)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
