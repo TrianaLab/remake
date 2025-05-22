@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"os"
 
 	"github.com/TrianaLab/remake/config"
 	"github.com/TrianaLab/remake/internal/cache"
@@ -32,7 +33,11 @@ func (s *ArtifactStore) Push(ctx context.Context, reference, path string) error 
 	if err := s.client.Push(ctx, reference, path); err != nil {
 		return err
 	}
-	return nil
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	return s.cache.Push(ctx, reference, data)
 }
 
 func (s *ArtifactStore) Pull(ctx context.Context, reference string) (string, error) {
