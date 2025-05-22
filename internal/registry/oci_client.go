@@ -1,3 +1,24 @@
+// The MIT License (MIT)
+//
+// Copyright © 2025 TrianaLab - Eduardo Diaz <edudiazasencio@gmail.com>
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// THE SOFTWARE.
+
 package registry
 
 import (
@@ -7,11 +28,9 @@ import (
 	"path/filepath"
 
 	"github.com/google/go-containerregistry/pkg/name"
-
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/spf13/viper"
 	"oras.land/oras-go/v2"
-
 	"oras.land/oras-go/v2/content"
 	"oras.land/oras-go/v2/content/file"
 	"oras.land/oras-go/v2/content/memory"
@@ -22,14 +41,19 @@ import (
 	"github.com/TrianaLab/remake/config"
 )
 
+// OCIClient provides an implementation of Client for OCI registries.
+// It uses oras and go-containerregistry to authenticate, push, and pull artifacts.
 type OCIClient struct {
 	cfg *config.Config
 }
 
+// NewOCIClient returns a new OCIClient initialized with the given configuration.
 func NewOCIClient(cfg *config.Config) Client {
 	return &OCIClient{cfg: cfg}
 }
 
+// Login authenticates to the specified OCI registry using the provided credentials.
+// Successful login is persisted in the configuration file for future operations.
 func (c *OCIClient) Login(ctx context.Context, registry, user, pass string) error {
 	reg, err := remote.NewRegistry(registry)
 	if err != nil {
@@ -50,6 +74,8 @@ func (c *OCIClient) Login(ctx context.Context, registry, user, pass string) erro
 	return viper.WriteConfig()
 }
 
+// Push uploads the local file at path as an OCI artifact to the given reference.
+// It tags the artifact with the reference identifier and pushes it to the remote repository.
 func (c *OCIClient) Push(ctx context.Context, reference, path string) error {
 	ref, err := name.ParseReference(reference, name.WithDefaultRegistry(c.cfg.DefaultRegistry))
 	if err != nil {
@@ -85,9 +111,7 @@ func (c *OCIClient) Push(ctx context.Context, reference, path string) error {
 	}
 
 	artifactType := "application/vnd.remake.artifact"
-	opts := oras.PackManifestOptions{
-		Layers: []v1.Descriptor{fileDesc},
-	}
+	opts := oras.PackManifestOptions{Layers: []v1.Descriptor{fileDesc}}
 	manifestDesc, err := oras.PackManifest(ctx, fs, oras.PackManifestVersion1_1, artifactType, opts)
 	if err != nil {
 		return fmt.Errorf("packing manifest: %w", err)
@@ -108,9 +132,10 @@ func (c *OCIClient) Push(ctx context.Context, reference, path string) error {
 	return nil
 }
 
+// Pull downloads the artifact data for the given reference from the OCI registry.
+// It retrieves the manifest and returns the contents of the first layer (Makefile data).
 func (c *OCIClient) Pull(ctx context.Context, reference string) ([]byte, error) {
-	def := c.cfg.DefaultRegistry
-	ref, err := name.ParseReference(reference, name.WithDefaultRegistry(def))
+	ref, err := name.ParseReference(reference, name.WithDefaultRegistry(c.cfg.DefaultRegistry))
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +158,6 @@ func (c *OCIClient) Pull(ctx context.Context, reference string) ([]byte, error) 
 	}
 
 	store := memory.New()
-
 	if _, err := oras.Copy(ctx, repo, ref.Identifier(), store, ref.Identifier(), oras.DefaultCopyOptions); err != nil {
 		return nil, err
 	}

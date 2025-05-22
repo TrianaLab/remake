@@ -1,3 +1,24 @@
+// The MIT License (MIT)
+//
+// Copyright © 2025 TrianaLab - Eduardo Diaz <edudiazasencio@gmail.com>
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// THE SOFTWARE.
+
 package cache
 
 import (
@@ -15,14 +36,21 @@ import (
 	"github.com/TrianaLab/remake/config"
 )
 
+// HTTPCache implements CacheRepository for HTTP(S) references.
+// It stores blobs under a directory structure based on the URL host and path,
+// using SHA-256 digests for content addressing and symbolic links for references.
 type HTTPCache struct {
 	cfg *config.Config
 }
 
+// NewHTTPCache returns a new HTTPCache configured with the given settings.
 func NewHTTPCache(cfg *config.Config) CacheRepository {
 	return &HTTPCache{cfg: cfg}
 }
 
+// Push stores the given data bytes at a cache path derived from the reference URL.
+// It computes a SHA-256 digest, writes the blob under 'cacheDir/host/.../blobs',
+// and creates or updates a 'latest' symlink under 'cacheDir/host/.../refs'.
 func (c *HTTPCache) Push(ctx context.Context, reference string, data []byte) error {
 	u, err := url.Parse(reference)
 	if err != nil {
@@ -65,6 +93,9 @@ func (c *HTTPCache) Push(ctx context.Context, reference string, data []byte) err
 	return nil
 }
 
+// Pull retrieves the cached path for the given reference URL.
+// It reads the 'latest' symlink under 'cacheDir/host/.../refs' and returns its target.
+// Returns an error if the cache entry does not exist or is invalid.
 func (c *HTTPCache) Pull(ctx context.Context, reference string) (string, error) {
 	u, err := url.Parse(reference)
 	if err != nil {
