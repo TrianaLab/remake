@@ -32,7 +32,6 @@ func (a *App) Login(ctx context.Context, registry, user, pass string) error {
 			pass = viper.GetString("registries." + key + ".password")
 		}
 	}
-	// If config credentials are empty, request them
 	if user == "" {
 		fmt.Fprint(os.Stderr, "Username: ")
 		fmt.Scanln(&user)

@@ -24,7 +24,7 @@ func New(cfg *config.Config) CacheRepository {
 }
 
 func (c *LocalCache) Push(ctx context.Context, reference string, data []byte) error {
-	cacheFile, err := cachePath(c.cfg.CacheDir, reference)
+	cacheFile, err := c.cachePath(c.cfg.CacheDir, reference)
 	if err != nil {
 		return err
 	}
@@ -35,7 +35,7 @@ func (c *LocalCache) Push(ctx context.Context, reference string, data []byte) er
 }
 
 func (c *LocalCache) Pull(ctx context.Context, reference string) (string, error) {
-	cacheFile, err := cachePath(c.cfg.CacheDir, reference)
+	cacheFile, err := c.cachePath(c.cfg.CacheDir, reference)
 	if err != nil {
 		return "", err
 	}
@@ -45,8 +45,8 @@ func (c *LocalCache) Pull(ctx context.Context, reference string) (string, error)
 	return cacheFile, nil
 }
 
-func cachePath(base, reference string) (string, error) {
-	ref, err := name.ParseReference(reference)
+func (c *LocalCache) cachePath(base, reference string) (string, error) {
+	ref, err := name.ParseReference(reference, name.WithDefaultRegistry(c.cfg.DefaultRegistry))
 	if err != nil {
 		return "", fmt.Errorf("invalid reference %s: %w", reference, err)
 	}

@@ -2,11 +2,16 @@ package registry
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
 	"github.com/google/go-containerregistry/pkg/name"
 
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/spf13/viper"
 	"oras.land/oras-go/v2"
+
+	"oras.land/oras-go/v2/content"
 	"oras.land/oras-go/v2/content/file"
 	"oras.land/oras-go/v2/content/memory"
 	"oras.land/oras-go/v2/registry/remote"
@@ -51,8 +56,7 @@ func (c *DefaultClient) Login(ctx context.Context, registry, user, pass string) 
 }
 
 func (c *DefaultClient) Push(ctx context.Context, reference, path string) error {
-	def := c.cfg.DefaultRegistry
-	ref, err := name.ParseReference(reference, name.WithDefaultRegistry(def))
+	ref, err := name.ParseReference(reference, name.WithDefaultRegistry(c.cfg.DefaultRegistry))
 	if err != nil {
 		return err
 	}
@@ -111,31 +115,30 @@ func (c *DefaultClient) Pull(ctx context.Context, reference string) ([]byte, err
 	if _, err := oras.Copy(ctx, repo, ref.Identifier(), store, ref.Identifier(), oras.DefaultCopyOptions); err != nil {
 		return nil, err
 	}
-	/*
-		manifestDesc, err := store.Resolve(ctx, ref.Identifier())
-		if err != nil {
-			return nil, err
-		}
 
-		manifestBytes, err := content.FetchAll(ctx, store.Fetch(ctx, ref.Identifier()), manifestDesc)
-		if err != nil {
-			return nil, err
-		}
+	manifestDesc, err := store.Resolve(ctx, ref.Identifier())
+	if err != nil {
+		return nil, err
+	}
 
-		var manifest ocispec.Manifest
-		if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
-			return nil, err
-		}
-		if len(manifest.Layers) == 0 {
-			return nil, fmt.Errorf("no layers found in artifact %s", reference)
-		}
+	manifestBytes, err := content.FetchAll(ctx, store, manifestDesc)
+	if err != nil {
+		return nil, err
+	}
 
-		layerDesc := manifest.Layers[0]
-		data, err := content.FetchAll(ctx, store, layerDesc)
-		if err != nil {
-			return nil, err
-		}
+	var manifest ocispec.Manifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		return nil, err
+	}
+	if len(manifest.Layers) == 0 {
+		return nil, fmt.Errorf("no layers found in artifact %s", reference)
+	}
 
-		return data, nil*/
-	return nil, nil
+	layerDesc := manifest.Layers[0]
+	data, err := content.FetchAll(ctx, store, layerDesc)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
 }

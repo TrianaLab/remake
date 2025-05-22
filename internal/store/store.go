@@ -2,8 +2,6 @@ package store
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 
 	"github.com/TrianaLab/remake/config"
 	"github.com/TrianaLab/remake/internal/cache"
@@ -50,19 +48,9 @@ func (s *ArtifactStore) Pull(ctx context.Context, reference string) (string, err
 		return "", err
 	}
 
-	if !s.cfg.NoCache {
-		_ = s.cache.Push(ctx, reference, data)
-		return s.cache.Pull(ctx, reference)
-	}
-
-	tmpFile, err := os.CreateTemp("", filepath.Base(reference)+"-*")
+	err = s.cache.Push(ctx, reference, data)
 	if err != nil {
 		return "", err
 	}
-	defer tmpFile.Close()
-
-	if _, err := tmpFile.Write(data); err != nil {
-		return "", err
-	}
-	return tmpFile.Name(), nil
+	return s.cache.Pull(ctx, reference)
 }
