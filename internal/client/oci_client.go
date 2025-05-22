@@ -26,6 +26,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -77,7 +78,8 @@ func (c *OCIClient) Login(ctx context.Context, registry, user, pass string) erro
 // Push uploads the local file at path as an OCI artifact to the given reference.
 // It tags the artifact with the reference identifier and pushes it to the remote repository.
 func (c *OCIClient) Push(ctx context.Context, reference, path string) error {
-	ref, err := name.ParseReference(reference, name.WithDefaultRegistry(c.cfg.DefaultRegistry))
+	raw := strings.TrimPrefix(reference, "oci://")
+	ref, err := name.ParseReference(raw, name.WithDefaultRegistry(c.cfg.DefaultRegistry))
 	if err != nil {
 		return err
 	}
@@ -139,7 +141,8 @@ func (c *OCIClient) Push(ctx context.Context, reference, path string) error {
 // Pull downloads the artifact data for the given reference from the OCI registry.
 // It retrieves the manifest and returns the contents of the first layer (Makefile data).
 func (c *OCIClient) Pull(ctx context.Context, reference string) ([]byte, error) {
-	ref, err := name.ParseReference(reference, name.WithDefaultRegistry(c.cfg.DefaultRegistry))
+	raw := strings.TrimPrefix(reference, "oci://")
+	ref, err := name.ParseReference(raw, name.WithDefaultRegistry(c.cfg.DefaultRegistry))
 	if err != nil {
 		return nil, err
 	}

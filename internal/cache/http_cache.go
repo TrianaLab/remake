@@ -60,9 +60,9 @@ func (c *HTTPCache) Push(ctx context.Context, reference string, data []byte) err
 	digest := "sha256:" + hex.EncodeToString(sum[:])
 
 	segments := strings.Split(strings.TrimPrefix(u.Path, "/"), "/")
-	baseElems := append([]string{c.cfg.CacheDir, u.Host}, segments...)
+	base := append([]string{c.cfg.CacheDir, u.Host}, segments...)
 
-	blobDir := filepath.Join(append(baseElems, "blobs")...)
+	blobDir := filepath.Join(append(base, "blobs")...)
 	if err := os.MkdirAll(blobDir, 0o755); err != nil {
 		return err
 	}
@@ -73,22 +73,23 @@ func (c *HTTPCache) Push(ctx context.Context, reference string, data []byte) err
 		return err
 	}
 	if _, err := io.Copy(f, bytes.NewReader(data)); err != nil {
-		_ = f.Close()
+		f.Close()
 		return err
 	}
-	if err = f.Close(); err != nil {
+	if err := f.Close(); err != nil {
 		return err
 	}
 	if err := os.Rename(tmp, blobPath); err != nil {
 		return err
 	}
 
-	refDir := filepath.Join(append(baseElems, "refs")...)
+	refDir := filepath.Join(append(base, "refs")...)
 	if err := os.MkdirAll(refDir, 0o755); err != nil {
 		return err
 	}
 	latest := filepath.Join(refDir, "latest")
-	if err := os.Remove(latest); err != nil {
+	// ignore error if symlink does not exist
+	if err := os.Remove(latest); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	if err := os.Symlink(blobPath, latest); err != nil {
