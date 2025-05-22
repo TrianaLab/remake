@@ -55,21 +55,10 @@ func (s *ArtifactStore) Pull(ctx context.Context, reference string) (string, err
 	switch s.cfg.ParseReference(reference) {
 	case config.ReferenceLocal:
 		return reference, nil
-	case config.ReferenceHTTP:
-		client := registry.NewClient(s.cfg, reference)
-		data, err := client.Pull(ctx, reference)
-		if err != nil {
-			return "", err
-		}
-		cacheRepo := cache.NewCache(s.cfg, reference)
-		if err := cacheRepo.Push(ctx, reference, data); err != nil {
-			return "", err
-		}
-		return cacheRepo.Pull(ctx, reference)
-	case config.ReferenceOCI:
-		cacheRepo := cache.NewCache(s.cfg, reference)
+	default:
+		cache := cache.NewCache(s.cfg, reference)
 		if !s.cfg.NoCache {
-			if path, err := cacheRepo.Pull(ctx, reference); err == nil {
+			if path, err := cache.Pull(ctx, reference); err == nil {
 				return path, nil
 			}
 		}
@@ -78,11 +67,9 @@ func (s *ArtifactStore) Pull(ctx context.Context, reference string) (string, err
 		if err != nil {
 			return "", err
 		}
-		if err := cacheRepo.Push(ctx, reference, data); err != nil {
+		if err := cache.Push(ctx, reference, data); err != nil {
 			return "", err
 		}
-		return cacheRepo.Pull(ctx, reference)
-	default:
-		return "", fmt.Errorf("unknown reference type for %s", reference)
+		return cache.Pull(ctx, reference)
 	}
 }
