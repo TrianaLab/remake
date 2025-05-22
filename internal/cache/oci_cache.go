@@ -74,10 +74,14 @@ func (c *OCIRepository) Push(ctx context.Context, reference string, data []byte)
 		return err
 	}
 	if _, err := io.Copy(f, bytes.NewReader(data)); err != nil {
-		f.Close()
+		if err := f.Close(); err != nil {
+			return err
+		}
 		return err
 	}
-	f.Close()
+	if err := f.Close(); err != nil {
+		return err
+	}
 	if err := os.Rename(tmp, blobPath); err != nil {
 		return err
 	}
@@ -88,7 +92,9 @@ func (c *OCIRepository) Push(ctx context.Context, reference string, data []byte)
 		return err
 	}
 	tagPath := filepath.Join(refDir, ref.Identifier())
-	os.Remove(tagPath)
+	if err := os.Remove(tagPath); err != nil {
+		return err
+	}
 	if err := os.Symlink(blobPath, tagPath); err != nil {
 		return err
 	}

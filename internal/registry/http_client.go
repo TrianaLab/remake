@@ -61,7 +61,12 @@ func (h *HTTPClient) Pull(ctx context.Context, reference string) ([]byte, error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch %s: %w", reference, err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		closeErr := resp.Body.Close()
+		if closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code %d when fetching %s", resp.StatusCode, reference)

@@ -30,7 +30,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/spf13/viper"
-	"oras.land/oras-go/v2"
+	oras "oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content"
 	"oras.land/oras-go/v2/content/file"
 	"oras.land/oras-go/v2/content/memory"
@@ -102,7 +102,11 @@ func (c *OCIClient) Push(ctx context.Context, reference, path string) error {
 	if err != nil {
 		return err
 	}
-	defer fs.Close()
+	defer func() {
+		if cerr := fs.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	mediaType := "application/vnd.remake.file"
 	fileDesc, err := fs.Add(ctx, path, mediaType, "")

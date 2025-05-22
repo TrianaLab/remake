@@ -70,7 +70,9 @@ func (a *App) Login(ctx context.Context, registry, user, pass string) error {
 	// Prompt for username if still empty
 	if user == "" {
 		fmt.Fprint(os.Stderr, "Username: ")
-		fmt.Scanln(&user)
+		if _, err := fmt.Scanln(&user); err != nil {
+			return err
+		}
 	}
 
 	// Prompt for password if still empty

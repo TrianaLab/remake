@@ -73,10 +73,12 @@ func (c *HTTPCache) Push(ctx context.Context, reference string, data []byte) err
 		return err
 	}
 	if _, err := io.Copy(f, bytes.NewReader(data)); err != nil {
-		f.Close()
+		_ = f.Close()
 		return err
 	}
-	f.Close()
+	if err = f.Close(); err != nil {
+		return err
+	}
 	if err := os.Rename(tmp, blobPath); err != nil {
 		return err
 	}
@@ -86,7 +88,9 @@ func (c *HTTPCache) Push(ctx context.Context, reference string, data []byte) err
 		return err
 	}
 	latest := filepath.Join(refDir, "latest")
-	os.Remove(latest)
+	if err := os.Remove(latest); err != nil {
+		return err
+	}
 	if err := os.Symlink(blobPath, latest); err != nil {
 		return err
 	}
