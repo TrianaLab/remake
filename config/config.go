@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,8 +9,9 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Config almacena la configuración de Remake
 type Config struct {
+	BaseDir         string
+	ConfigFile      string
 	CacheDir        string
 	DefaultMakefile string
 	DefaultRegistry string
@@ -17,9 +19,7 @@ type Config struct {
 	NoCache         bool
 }
 
-// InitConfig prepara Viper, establece defaults y carga el archivo de configuración
 func InitConfig() (*Config, error) {
-	// determinar directorio base ~/.remake
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, err
@@ -29,19 +29,18 @@ func InitConfig() (*Config, error) {
 		return nil, err
 	}
 
-	// configurar Viper para usar ~/.remake/config.yaml
 	configFile := filepath.Join(baseDir, "config.yaml")
 	viper.SetConfigFile(configFile)
 	viper.SetConfigType("yaml")
 
-	// valores por defecto
+	viper.SetDefault("baseDir", baseDir)
+	viper.SetDefault("configFile", configFile)
 	viper.SetDefault("cacheDir", filepath.Join(baseDir, "cache"))
 	viper.SetDefault("defaultMakefile", "makefile")
 	viper.SetDefault("defaultRegistry", "ghcr.io")
 	viper.SetDefault("version", "dev")
 	viper.SetDefault("noCache", false)
 
-	// inicializar archivo if no existe
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
 		viper.Set("registries", map[string]interface{}{})
 		if err := viper.WriteConfigAs(configFile); err != nil {
@@ -49,13 +48,13 @@ func InitConfig() (*Config, error) {
 		}
 	}
 
-	// leer configuración
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, err
 	}
 
-	// mapear en struct
 	cfg := &Config{
+		BaseDir:         viper.GetString("baseDir"),
+		ConfigFile:      viper.GetString("configFile"),
 		CacheDir:        viper.GetString("cacheDir"),
 		DefaultMakefile: viper.GetString("defaultMakefile"),
 		DefaultRegistry: viper.GetString("defaultRegistry"),
@@ -65,12 +64,22 @@ func InitConfig() (*Config, error) {
 	return cfg, nil
 }
 
-// SaveConfig persiste los cambios en config.yaml
 func SaveConfig() error {
 	return viper.WriteConfig()
 }
 
-// NormalizeKey reemplaza puntos por guiones bajos en un endpoint
 func NormalizeKey(endpoint string) string {
 	return strings.ReplaceAll(endpoint, ".", "_")
+}
+
+func (c *Config) PrintConfig() error {
+	configFilePath := viper.GetString("configFile")
+
+	content, err := os.ReadFile(configFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	fmt.Print(string(content))
+	return nil
 }

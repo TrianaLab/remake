@@ -1,15 +1,13 @@
-// cmd/pull/pull.go
-package pull
+package cmd
 
 import (
 	"context"
 
 	"github.com/TrianaLab/remake/app"
-	"github.com/TrianaLab/remake/config"
 	"github.com/spf13/cobra"
 )
 
-func PullCmd(cfg *config.Config) *cobra.Command {
+func pullCmd(app *app.App) *cobra.Command {
 	var noCache bool
 
 	cmd := &cobra.Command{
@@ -20,8 +18,8 @@ func PullCmd(cfg *config.Config) *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ref := args[0]
-			cfg.NoCache = noCache
-			return app.New(cfg).Pull(context.Background(), ref)
+			app.Cfg.NoCache = noCache
+			return app.Pull(context.Background(), ref)
 		},
 	}
 

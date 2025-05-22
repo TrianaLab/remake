@@ -3,11 +3,7 @@ package cmd
 import (
 	"log"
 
-	"github.com/TrianaLab/remake/cmd/login"
-	"github.com/TrianaLab/remake/cmd/pull"
-	"github.com/TrianaLab/remake/cmd/push"
-	"github.com/TrianaLab/remake/cmd/run"
-	"github.com/TrianaLab/remake/cmd/version"
+	"github.com/TrianaLab/remake/app"
 	"github.com/TrianaLab/remake/config"
 	"github.com/spf13/cobra"
 )
@@ -24,12 +20,15 @@ func Execute() error {
 		log.Fatal(err)
 	}
 
+	a := app.New(cfg)
+
 	rootCmd.AddCommand(
-		login.LoginCmd(cfg),
-		push.PushCmd(cfg),
-		pull.PullCmd(cfg),
-		run.RunCmd(cfg),
-		version.VersionCmd(cfg),
+		loginCmd(a),
+		pushCmd(a),
+		pullCmd(a),
+		runCmd(a),
+		versionCmd(a),
+		configCmd(a),
 	)
 	return rootCmd.Execute()
 }

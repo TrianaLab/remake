@@ -1,15 +1,13 @@
-// cmd/run/run.go
-package run
+package cmd
 
 import (
 	"context"
 
 	"github.com/TrianaLab/remake/app"
-	"github.com/TrianaLab/remake/config"
 	"github.com/spf13/cobra"
 )
 
-func RunCmd(cfg *config.Config) *cobra.Command {
+func runCmd(app *app.App) *cobra.Command {
 	var (
 		noCache bool
 		file    string
@@ -22,8 +20,8 @@ func RunCmd(cfg *config.Config) *cobra.Command {
 		Example: "  remake run all build test\n  remake run --file=ghcr.io/user/test.mk:v1 test",
 		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg.NoCache = noCache
-			return app.New(cfg).Run(context.Background(), file, args)
+			app.Cfg.NoCache = noCache
+			return app.Run(context.Background(), file, args)
 		},
 	}
 

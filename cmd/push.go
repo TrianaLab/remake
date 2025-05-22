@@ -1,15 +1,13 @@
-// cmd/push/push.go
-package push
+package cmd
 
 import (
 	"context"
 
 	"github.com/TrianaLab/remake/app"
-	"github.com/TrianaLab/remake/config"
 	"github.com/spf13/cobra"
 )
 
-func PushCmd(cfg *config.Config) *cobra.Command {
+func pushCmd(app *app.App) *cobra.Command {
 	var (
 		noCache bool
 		file    string
@@ -23,8 +21,8 @@ func PushCmd(cfg *config.Config) *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ref := args[0]
-			cfg.NoCache = noCache
-			return app.New(cfg).Push(context.Background(), ref, file)
+			app.Cfg.NoCache = noCache
+			return app.Push(context.Background(), ref, file)
 		},
 	}
 

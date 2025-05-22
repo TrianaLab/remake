@@ -1,15 +1,13 @@
-// cmd/login/login.go
-package login
+package cmd
 
 import (
 	"context"
 
 	"github.com/TrianaLab/remake/app"
-	"github.com/TrianaLab/remake/config"
 	"github.com/spf13/cobra"
 )
 
-func LoginCmd(cfg *config.Config) *cobra.Command {
+func loginCmd(app *app.App) *cobra.Command {
 	var (
 		usernameFlag string
 		passwordFlag string
@@ -21,11 +19,11 @@ func LoginCmd(cfg *config.Config) *cobra.Command {
 		Example: "  remake login ghcr.io -u myuser -p mypass\n  remake login             # toma defaultRegistry y pide credenciales si hacen falta",
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			registry := cfg.DefaultRegistry
+			registry := app.Cfg.DefaultRegistry
 			if len(args) == 1 {
 				registry = args[0]
 			}
-			return app.New(cfg).Login(context.Background(), registry, usernameFlag, passwordFlag)
+			return app.Login(context.Background(), registry, usernameFlag, passwordFlag)
 		},
 	}
 

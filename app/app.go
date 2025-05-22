@@ -15,11 +15,11 @@ import (
 type App struct {
 	store  store.Store
 	runner run.Runner
-	cfg    *config.Config
+	Cfg    *config.Config
 }
 
 func New(cfg *config.Config) *App {
-	return &App{store: store.New(cfg), runner: run.New(cfg), cfg: cfg}
+	return &App{store: store.New(cfg), runner: run.New(cfg), Cfg: cfg}
 }
 
 func (a *App) Login(ctx context.Context, registry, user, pass string) error {
