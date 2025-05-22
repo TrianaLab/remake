@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 
 	"github.com/google/go-containerregistry/pkg/name"
 
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/spf13/viper"
 	"oras.land/oras-go/v2"
 
@@ -75,14 +76,41 @@ func (c *DefaultClient) Push(ctx context.Context, reference, path string) error 
 			Credential: auth.StaticCredential(repoRef.RegistryStr(), auth.Credential{Username: user, Password: pass}),
 		}
 	}
-	fs, err := file.New(path)
+
+	dir := filepath.Dir(path)
+	fs, err := file.New(dir)
 	if err != nil {
 		return err
 	}
 	defer fs.Close()
-	if _, err := oras.Copy(ctx, fs, ref.Identifier(), repo, ref.Identifier(), oras.DefaultCopyOptions); err != nil {
-		return err
+
+	mediaType := "application/vnd.remake.file"
+	fileDesc, err := fs.Add(ctx, path, mediaType, "")
+	if err != nil {
+		return fmt.Errorf("adding file to store: %w", err)
 	}
+
+	artifactType := "application/vnd.remake.artifact"
+	opts := oras.PackManifestOptions{
+		Layers: []v1.Descriptor{fileDesc},
+	}
+	manifestDesc, err := oras.PackManifest(ctx, fs, oras.PackManifestVersion1_1, artifactType, opts)
+	if err != nil {
+		return fmt.Errorf("packing manifest: %w", err)
+	}
+	if manifestDesc.Digest.String() == "" {
+		return fmt.Errorf("invalid manifest descriptor: empty digest")
+	}
+
+	tag := ref.Identifier()
+	if err := fs.Tag(ctx, manifestDesc, tag); err != nil {
+		return fmt.Errorf("tagging manifest: %w", err)
+	}
+
+	if _, err := oras.Copy(ctx, fs, tag, repo, tag, oras.DefaultCopyOptions); err != nil {
+		return fmt.Errorf("pushing to remote: %w", err)
+	}
+
 	return nil
 }
 
@@ -126,7 +154,7 @@ func (c *DefaultClient) Pull(ctx context.Context, reference string) ([]byte, err
 		return nil, err
 	}
 
-	var manifest ocispec.Manifest
+	var manifest v1.Manifest
 	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
 		return nil, err
 	}

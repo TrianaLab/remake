@@ -9,8 +9,7 @@ import (
 
 func pushCmd(app *app.App) *cobra.Command {
 	var (
-		noCache bool
-		file    string
+		file string
 	)
 
 	cmd := &cobra.Command{
@@ -21,12 +20,10 @@ func pushCmd(app *app.App) *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ref := args[0]
-			app.Cfg.NoCache = noCache
 			return app.Push(context.Background(), ref, file)
 		},
 	}
 
-	cmd.Flags().BoolVar(&noCache, "no-cache", false, "Bypass local cache")
 	cmd.Flags().StringVarP(&file, "file", "f", "makefile", "Local Makefile to push")
 	return cmd
 }
