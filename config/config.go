@@ -9,6 +9,14 @@ import (
 	"github.com/spf13/viper"
 )
 
+type ReferenceType int
+
+const (
+	ReferenceHTTP ReferenceType = iota
+	ReferenceLocal
+	ReferenceOCI
+)
+
 type Config struct {
 	BaseDir         string
 	ConfigFile      string
@@ -62,6 +70,19 @@ func InitConfig() (*Config, error) {
 		NoCache:         viper.GetBool("noCache"),
 	}
 	return cfg, nil
+}
+
+func (c *Config) ParseReference(ref string) ReferenceType {
+	if strings.HasPrefix(ref, "http://") || strings.HasPrefix(ref, "https://") {
+		return ReferenceHTTP
+	}
+	if _, err := os.Stat(ref); err == nil {
+		return ReferenceLocal
+	}
+	if _, err := os.Stat("./" + ref); err == nil {
+		return ReferenceLocal
+	}
+	return ReferenceOCI
 }
 
 func SaveConfig() error {

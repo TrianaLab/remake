@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/TrianaLab/remake/config"
@@ -16,46 +17,82 @@ type Store interface {
 }
 
 type ArtifactStore struct {
-	client registry.Client
-	cache  cache.CacheRepository
-	cfg    *config.Config
+	cfg   *config.Config
+	cache cache.CacheRepository
 }
 
 func New(cfg *config.Config) Store {
-	return &ArtifactStore{client: registry.New(cfg), cache: cache.New(cfg), cfg: cfg}
+	return &ArtifactStore{cfg: cfg, cache: cache.New(cfg)}
 }
 
 func (s *ArtifactStore) Login(ctx context.Context, registry, user, pass string) error {
-	return s.client.Login(ctx, registry, user, pass)
+	client := s.getClient(registry)
+	return client.Login(ctx, registry, user, pass)
 }
 
 func (s *ArtifactStore) Push(ctx context.Context, reference, path string) error {
-	if err := s.client.Push(ctx, reference, path); err != nil {
-		return err
+	switch s.cfg.ParseReference(reference) {
+	case config.ReferenceHTTP:
+		return fmt.Errorf("pushing to HTTP(s) references is not supported")
+	case config.ReferenceLocal:
+		return fmt.Errorf("pushing local references is not supported")
+	case config.ReferenceOCI:
+		client := s.getClient(reference)
+		if err := client.Push(ctx, reference, path); err != nil {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return s.cache.Push(ctx, reference, data)
+	default:
+		return fmt.Errorf("unknown reference type for %s", reference)
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	return s.cache.Push(ctx, reference, data)
 }
 
 func (s *ArtifactStore) Pull(ctx context.Context, reference string) (string, error) {
-	if !s.cfg.NoCache {
-		path, err := s.cache.Pull(ctx, reference)
-		if err == nil {
-			return path, nil
+	switch s.cfg.ParseReference(reference) {
+	case config.ReferenceLocal:
+		return reference, nil
+	case config.ReferenceHTTP:
+		client := s.getClient(reference)
+		data, err := client.Pull(ctx, reference)
+		if err != nil {
+			return "", err
 		}
+		if err := s.cache.Push(ctx, reference, data); err != nil {
+			return "", err
+		}
+		return s.cache.Pull(ctx, reference)
+	case config.ReferenceOCI:
+		if !s.cfg.NoCache {
+			if path, err := s.cache.Pull(ctx, reference); err == nil {
+				return path, nil
+			}
+		}
+		client := s.getClient(reference)
+		data, err := client.Pull(ctx, reference)
+		if err != nil {
+			return "", err
+		}
+		if err := s.cache.Push(ctx, reference, data); err != nil {
+			return "", err
+		}
+		return s.cache.Pull(ctx, reference)
+	default:
+		return "", fmt.Errorf("unknown reference type for %s", reference)
 	}
+}
 
-	data, err := s.client.Pull(ctx, reference)
-	if err != nil {
-		return "", err
+func (s *ArtifactStore) getClient(reference string) registry.Client {
+	t := s.cfg.ParseReference(reference)
+	switch t {
+	case config.ReferenceHTTP:
+		return registry.NewHTTPClient()
+	case config.ReferenceOCI:
+		return registry.NewOCIClient(s.cfg)
+	default:
+		return registry.NewOCIClient(s.cfg)
 	}
-
-	err = s.cache.Push(ctx, reference, data)
-	if err != nil {
-		return "", err
-	}
-	return s.cache.Pull(ctx, reference)
 }
