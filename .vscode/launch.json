@@ -59,8 +59,6 @@
         "run",
         "--file",
         "${input:reference}",
-        "--no-cache",
-        "${input:noCache}",
         "${input:target}",
       ]
     },
