@@ -26,6 +26,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/TrianaLab/remake/config"
@@ -156,6 +157,29 @@ func TestPullReadFileError(t *testing.T) {
 
 	if err := app.Pull(context.Background(), "ref"); err == nil {
 		t.Fatal("expected read file error")
+	}
+}
+
+// TestPullPrintsFileContent ensures Pull prints the file contents to stdout.
+func TestPullPrintsFileContent(t *testing.T) {
+	tmpFile := filepath.Join(os.TempDir(), "testfile.txt")
+	content := "hello world"
+	if err := os.WriteFile(tmpFile, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+	defer os.Remove(tmpFile)
+
+	cfg := &config.Config{}
+	fs := &fakeStoreArgs{pullPath: tmpFile}
+	app := &App{store: fs, runner: &fakeRunnerErr{}, Cfg: cfg}
+
+	out, _ := capture(func() {
+		if err := app.Pull(context.Background(), "ref"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+	if out != content {
+		t.Errorf("unexpected output: %q", out)
 	}
 }
 
