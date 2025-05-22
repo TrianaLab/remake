@@ -24,6 +24,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -160,10 +161,12 @@ func TestPushCmdErrorPropagation(t *testing.T) {
 	fs := &fakeStore{pushErr: errors.New("push failed")}
 	setUnexportedField(a, "store", fs)
 	c := pushCmd(a)
-	// reference is positional, file flag is -f
+	c.SilenceUsage = true
+	c.SilenceErrors = true
+
 	_, err := captureCmdOutput(c, []string{"ref", "-f", "path"})
 	if err == nil || err.Error() != "push failed" {
-		t.Fatalf("expected 'push failed', got %v", err)
+		t.Fatalf("expected error 'push failed', got %v", err)
 	}
 }
 
@@ -211,5 +214,46 @@ func TestRunCmdExecution(t *testing.T) {
 	}
 	if !fr.executed {
 		t.Error("expected runner to execute")
+	}
+}
+
+// TestExecute_InitConfigFatal covers the log.Fatal path in Execute()
+func TestExecute_InitConfigFatal(t *testing.T) {
+	// swap out initConfigFunc and fatalFunc
+	origInit := initConfigFunc
+	origFatal := fatalFunc
+	defer func() {
+		initConfigFunc = origInit
+		fatalFunc = origFatal
+	}()
+
+	// make InitConfig return an error
+	initConfigFunc = func() (*config.Config, error) {
+		return nil, errors.New("boom init")
+	}
+
+	called := false
+	var fatalErr error
+	// override fatalFunc to capture its args
+	fatalFunc = func(v ...any) {
+		called = true
+		if len(v) > 0 {
+			if errArg, ok := v[0].(error); ok {
+				fatalErr = errArg
+			} else {
+				fatalErr = fmt.Errorf("%v", v[0])
+			}
+		}
+		// do not os.Exit in tests
+	}
+
+	// run Execute; it should call fatalFunc("boom init")
+	Execute()
+
+	if !called {
+		t.Fatal("expected fatalFunc to be called")
+	}
+	if fatalErr == nil || fatalErr.Error() != "boom init" {
+		t.Fatalf("expected fatalErr \"boom init\", got %v", fatalErr)
 	}
 }

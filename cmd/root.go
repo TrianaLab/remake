@@ -29,6 +29,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// allow tests to override InitConfig and Fatal
+var initConfigFunc = config.InitConfig
+var fatalFunc = log.Fatal
+
 // rootCmd is the base command for the Remake CLI. It initializes configuration,
 // creates the application instance, and registers all subcommands.
 var rootCmd = &cobra.Command{
@@ -60,9 +64,9 @@ Available commands:
 // It loads settings, creates the application, registers subcommands,
 // silences usage output on error, and runs the Cobra command tree.
 func Execute() error {
-	cfg, err := config.InitConfig()
+	cfg, err := initConfigFunc()
 	if err != nil {
-		log.Fatal(err)
+		fatalFunc(err)
 	}
 
 	a := app.New(cfg)
