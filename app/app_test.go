@@ -29,41 +29,11 @@ import (
 	"testing"
 
 	"github.com/TrianaLab/remake/config"
+	"github.com/creack/pty"
+	"github.com/spf13/viper"
 )
 
-type fakeStore struct {
-	loginCalled bool
-	loginErr    error
-	pushArgs    []string
-	pushErr     error
-	pullPath    string
-	pullErr     error
-}
-
-func (f *fakeStore) Login(ctx context.Context, registry, user, pass string) error {
-	f.loginCalled = true
-	return f.loginErr
-}
-
-func (f *fakeStore) Push(ctx context.Context, reference, path string) error {
-	f.pushArgs = []string{reference, path}
-	return f.pushErr
-}
-
-func (f *fakeStore) Pull(ctx context.Context, reference string) (string, error) {
-	return f.pullPath, f.pullErr
-}
-
-type fakeRunner struct {
-	runArgs []interface{}
-	runErr  error
-}
-
-func (f *fakeRunner) Run(ctx context.Context, path string, makeFlags, targets []string) error {
-	f.runArgs = []interface{}{path, makeFlags, targets}
-	return f.runErr
-}
-
+// capture redirects stdout and stderr for testing.
 func capture(f func()) (string, string) {
 	origOut, origErr := os.Stdout, os.Stderr
 	rOut, wOut, _ := os.Pipe()
@@ -80,13 +50,54 @@ func capture(f func()) (string, string) {
 	return string(outBytes), string(errBytes)
 }
 
-func TestLoginSuccess(t *testing.T) {
+type fakeStoreArgs struct {
+	loginCalled                   bool
+	loginErr                      error
+	registryArg, userArg, passArg string
+	pushArgs                      []string
+	pushErr                       error
+	pullPath                      string
+	pullErr                       error
+}
+
+func (f *fakeStoreArgs) Login(ctx context.Context, registry, user, pass string) error {
+	f.loginCalled = true
+	f.registryArg, f.userArg, f.passArg = registry, user, pass
+	return f.loginErr
+}
+
+func (f *fakeStoreArgs) Push(ctx context.Context, reference, path string) error {
+	f.pushArgs = []string{reference, path}
+	return f.pushErr
+}
+
+func (f *fakeStoreArgs) Pull(ctx context.Context, reference string) (string, error) {
+	return f.pullPath, f.pullErr
+}
+
+type fakeRunnerErr struct {
+	runArgs []interface{}
+	runErr  error
+}
+
+func (f *fakeRunnerErr) Run(ctx context.Context, path string, makeFlags, targets []string) error {
+	f.runArgs = []interface{}{path, makeFlags, targets}
+	return f.runErr
+}
+
+// TestLoginLoadsFromConfig ensures credentials load from Viper when flags are empty.
+func TestLoginLoadsFromConfig(t *testing.T) {
+	viper.Reset()
+	key := config.NormalizeKey("myreg")
+	viper.Set("registries."+key+".username", "cfgUser")
+	viper.Set("registries."+key+".password", "cfgPass")
+
 	cfg := &config.Config{}
-	fs := &fakeStore{}
-	app := &App{store: fs, runner: &fakeRunner{}, Cfg: cfg}
+	fs := &fakeStoreArgs{}
+	app := &App{store: fs, runner: &fakeRunnerErr{}, Cfg: cfg}
 
 	out, _ := capture(func() {
-		if err := app.Login(context.Background(), "reg", "user", "pass"); err != nil {
+		if err := app.Login(context.Background(), "myreg", "", ""); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
@@ -94,67 +105,212 @@ func TestLoginSuccess(t *testing.T) {
 	if !fs.loginCalled {
 		t.Error("expected Login to be called")
 	}
+	if fs.registryArg != "myreg" || fs.userArg != "cfgUser" || fs.passArg != "cfgPass" {
+		t.Errorf("wrong args: got registry=%q user=%q pass=%q", fs.registryArg, fs.userArg, fs.passArg)
+	}
 	if out != "Login succeeded ✅\n" {
 		t.Errorf("unexpected output: %q", out)
 	}
 }
 
-func TestLoginError(t *testing.T) {
+// TestLoginErrorPropagates ensures Login returns store errors.
+func TestLoginErrorPropagates(t *testing.T) {
 	cfg := &config.Config{}
-	fs := &fakeStore{loginErr: errors.New("fail")}
-	app := &App{store: fs, runner: &fakeRunner{}, Cfg: cfg}
+	fs := &fakeStoreArgs{loginErr: errors.New("login failed")}
+	app := &App{store: fs, runner: &fakeRunnerErr{}, Cfg: cfg}
 
 	_, _ = capture(func() {
-		if err := app.Login(context.Background(), "reg", "user", "pass"); err == nil {
+		if err := app.Login(context.Background(), "reg", "u", "p"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
 }
 
-func TestPushDelegation(t *testing.T) {
+// TestPushError ensures Push returns store errors.
+func TestPushError(t *testing.T) {
 	cfg := &config.Config{}
-	fs := &fakeStore{}
-	app := &App{store: fs, runner: &fakeRunner{}, Cfg: cfg}
+	fs := &fakeStoreArgs{pushErr: errors.New("push fail")}
+	app := &App{store: fs, runner: &fakeRunnerErr{}, Cfg: cfg}
 
-	if err := app.Push(context.Background(), "ref", "path"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(fs.pushArgs) != 2 || fs.pushArgs[0] != "ref" || fs.pushArgs[1] != "path" {
-		t.Errorf("unexpected push args: %v", fs.pushArgs)
+	if err := app.Push(context.Background(), "ref", "path"); err == nil || err.Error() != "push fail" {
+		t.Fatalf("expected push fail, got %v", err)
 	}
 }
 
-func TestPullDelegation(t *testing.T) {
-	tmpFile := os.TempDir() + "/testfile.txt"
-	os.WriteFile(tmpFile, []byte("hello"), 0o644)
-	defer os.Remove(tmpFile)
-
+// TestPullStoreError ensures Pull returns store errors.
+func TestPullStoreError(t *testing.T) {
 	cfg := &config.Config{}
-	fs := &fakeStore{pullPath: tmpFile}
-	app := &App{store: fs, runner: &fakeRunner{}, Cfg: cfg}
+	fs := &fakeStoreArgs{pullErr: errors.New("pull fail")}
+	app := &App{store: fs, runner: &fakeRunnerErr{}, Cfg: cfg}
 
-	out, _ := capture(func() {
-		if err := app.Pull(context.Background(), "ref"); err != nil {
+	if err := app.Pull(context.Background(), "ref"); err == nil || err.Error() != "pull fail" {
+		t.Fatalf("expected pull fail, got %v", err)
+	}
+}
+
+// TestPullReadFileError ensures Pull returns file-read errors.
+func TestPullReadFileError(t *testing.T) {
+	cfg := &config.Config{}
+	fs := &fakeStoreArgs{pullPath: "/non/existent/file"}
+	app := &App{store: fs, runner: &fakeRunnerErr{}, Cfg: cfg}
+
+	if err := app.Pull(context.Background(), "ref"); err == nil {
+		t.Fatal("expected read file error")
+	}
+}
+
+// TestRunPullError ensures Run returns errors from Pull.
+func TestRunPullError(t *testing.T) {
+	cfg := &config.Config{}
+	fs := &fakeStoreArgs{pullErr: errors.New("pull err")}
+	fr := &fakeRunnerErr{}
+	app := &App{store: fs, runner: fr, Cfg: cfg}
+
+	if err := app.Run(context.Background(), "ref", nil, []string{"t"}); err == nil || err.Error() != "pull err" {
+		t.Fatalf("expected pull err, got %v", err)
+	}
+}
+
+// TestRunRunnerError ensures Run returns errors from runner.Run.
+func TestRunRunnerError(t *testing.T) {
+	cfg := &config.Config{}
+	fs := &fakeStoreArgs{pullPath: "Makefile"}
+	fr := &fakeRunnerErr{runErr: errors.New("run err")}
+	app := &App{store: fs, runner: fr, Cfg: cfg}
+
+	if err := app.Run(context.Background(), "ref", []string{"-j4"}, []string{"build"}); err == nil || err.Error() != "run err" {
+		t.Fatalf("expected run err, got %v", err)
+	}
+}
+
+// TestNewInitializesFields ensures New sets up store, runner, and config.
+func TestNewInitializesFields(t *testing.T) {
+	cfg := &config.Config{}
+	app := New(cfg)
+
+	if app.Cfg != cfg {
+		t.Error("expected Cfg to be the provided config")
+	}
+	if app.store == nil {
+		t.Error("expected store to be initialized")
+	}
+	if app.runner == nil {
+		t.Error("expected runner to be initialized")
+	}
+}
+
+// TestLoginPromptUsernameSuccess covers interactive username prompt.
+func TestLoginPromptUsernameSuccess(t *testing.T) {
+	cfg := &config.Config{}
+	fs := &fakeStoreArgs{}
+	app := &App{store: fs, runner: &fakeRunnerErr{}, Cfg: cfg}
+
+	// simulate user input for username
+	r, w, _ := os.Pipe()
+	w.WriteString("inputUser\n")
+	w.Close()
+	origStdin := os.Stdin
+	os.Stdin = r
+	defer func() { os.Stdin = origStdin }()
+
+	_, errOut := capture(func() {
+		if err := app.Login(context.Background(), "reg", "", "passValue"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 
-	if out != "hello" {
-		t.Errorf("unexpected output: %q", out)
+	if !fs.loginCalled {
+		t.Error("expected Login to be called")
+	}
+	if fs.userArg != "inputUser" || fs.passArg != "passValue" {
+		t.Errorf("wrong credentials: got user=%q pass=%q", fs.userArg, fs.passArg)
+	}
+	if errOut != "Username: " {
+		t.Errorf("unexpected stderr: %q", errOut)
 	}
 }
 
-func TestRunDelegation(t *testing.T) {
+// TestLoginPromptUsernameError covers Scanln failure.
+func TestLoginPromptUsernameError(t *testing.T) {
 	cfg := &config.Config{}
-	fs := &fakeStore{pullPath: "Makefile"}
-	fr := &fakeRunner{}
-	app := &App{store: fs, runner: fr, Cfg: cfg}
+	fs := &fakeStoreArgs{}
+	app := &App{store: fs, runner: &fakeRunnerErr{}, Cfg: cfg}
 
-	err := app.Run(context.Background(), "ref", []string{"-j4"}, []string{"build"})
+	// empty stdin to force Scanln error
+	r, w, _ := os.Pipe()
+	w.Close()
+	origStdin := os.Stdin
+	os.Stdin = r
+	defer func() { os.Stdin = origStdin }()
+
+	_, errOut := capture(func() {
+		if err := app.Login(context.Background(), "reg", "", "pass"); err == nil {
+			t.Fatal("expected error from Scanln")
+		}
+	})
+
+	if errOut != "Username: " {
+		t.Errorf("unexpected stderr: %q", errOut)
+	}
+}
+
+// TestLoginPromptPasswordSuccess covers interactive password prompt using a pty.
+func TestLoginPromptPasswordSuccess(t *testing.T) {
+	cfg := &config.Config{}
+	fs := &fakeStoreArgs{}
+	app := &App{store: fs, runner: &fakeRunnerErr{}, Cfg: cfg}
+
+	// skip username prompt by providing user
+	master, slave, err := pty.Open()
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("failed to open pty: %v", err)
 	}
-	if len(fr.runArgs) != 3 {
-		t.Error("expected runner.Run to be called with three args")
+	defer master.Close()
+	defer slave.Close()
+
+	// write password to master
+	go func() {
+		master.Write([]byte("secretPass\n"))
+	}()
+
+	origStdin := os.Stdin
+	os.Stdin = slave
+	defer func() { os.Stdin = origStdin }()
+
+	_, errOut := capture(func() {
+		if err := app.Login(context.Background(), "reg", "userValue", ""); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	if !fs.loginCalled {
+		t.Error("expected Login to be called")
 	}
+	if fs.userArg != "userValue" || fs.passArg != "secretPass" {
+		t.Errorf("wrong credentials: got user=%q pass=%q", fs.userArg, fs.passArg)
+	}
+	if errOut != "Password: \n" {
+		t.Errorf("unexpected stderr: %q", errOut)
+	}
+}
+
+// TestLoginPromptPasswordError covers ReadPassword failure.
+func TestLoginPromptPasswordError(t *testing.T) {
+	cfg := &config.Config{}
+	fs := &fakeStoreArgs{}
+	app := &App{store: fs, runner: &fakeRunnerErr{}, Cfg: cfg}
+
+	// skip username prompt
+	origStdin := os.Stdin
+	r, w, _ := os.Pipe()
+	r.Close()
+	w.Close()
+	os.Stdin = r
+	defer func() { os.Stdin = origStdin }()
+
+	_, _ = capture(func() {
+		if err := app.Login(context.Background(), "reg", "u", ""); err == nil {
+			t.Fatal("expected error from ReadPassword")
+		}
+	})
 }

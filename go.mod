@@ -5,6 +5,7 @@ go 1.24.0
 toolchain go1.24.3
 
 require (
+	github.com/creack/pty v1.1.24
 	github.com/google/go-containerregistry v0.20.4
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/spf13/cobra v1.9.1
