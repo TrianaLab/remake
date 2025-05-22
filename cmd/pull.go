@@ -14,7 +14,7 @@ func pullCmd(app *app.App) *cobra.Command {
 		Use:     "pull <reference>",
 		Short:   "Fetch a remote Makefile artifact",
 		Long:    "Download the remote Makefile artifact and print its contents to stdout. Uses local cache unless --no-cache is set.",
-		Example: "  remake pull ghcr.io/myorg/myrepo:latest\n  remake pull ghcr.io/myorg/myrepo:latest --no-cache",
+		Example: "  remake pull ghcr.io/myorg/myrepo:latest\n  remake pull myorg/myrepo\n  remake pull ghcr.io/myorg/myrepo:latest --no-cache",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ref := args[0]

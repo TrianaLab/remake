@@ -16,7 +16,7 @@ func loginCmd(app *app.App) *cobra.Command {
 		Use:     "login [registry]",
 		Short:   "Authenticate against an OCI registry",
 		Long:    "Log in to the given OCI registry (defaults to the configured defaultRegistry).",
-		Example: "  remake login ghcr.io -u myuser -p mypass\n  remake login             # toma defaultRegistry y pide credenciales si hacen falta",
+		Example: "  remake login ghcr.io -u myuser -p mypass\n  remake login ghcr.io\n  remake login",
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			registry := app.Cfg.DefaultRegistry

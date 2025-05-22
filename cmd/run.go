@@ -17,7 +17,7 @@ func runCmd(app *app.App) *cobra.Command {
 		Use:     "run [targets...]",
 		Short:   "Execute one or more Makefile targets",
 		Long:    "Run given targets from a local or remote Makefile. Uses cache unless --no-cache is set; use --file to point to an alternate Makefile (path or OCI reference).",
-		Example: "  remake run all build test\n  remake run --file=ghcr.io/user/test.mk:v1 test",
+		Example: "  remake run all build test\n  remake run -f ghcr.io/myorg/myrepo:latest test",
 		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app.Cfg.NoCache = noCache

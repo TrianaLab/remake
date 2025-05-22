@@ -15,8 +15,8 @@ func pushCmd(app *app.App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "push <reference>",
 		Short:   "Upload a local Makefile artifact",
-		Long:    "Push a Makefile (default 'makefile') to the specified OCI reference. Uses cache unless --no-cache is set.",
-		Example: "  remake push ghcr.io/myorg/myrepo:latest\n  remake push ghcr.io/myorg/myrepo:latest --file=Makefile.dev --no-cache",
+		Long:    "Push a Makefile (default 'makefile') to the specified OCI reference.",
+		Example: "  remake push ghcr.io/myorg/myrepo:latest\n  remake push ghcr.io/myorg/myrepo:latest -f Makefile.dev",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ref := args[0]
