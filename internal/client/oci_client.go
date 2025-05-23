@@ -44,10 +44,11 @@ import (
 
 // These vars allows us to override functions in tests.
 var (
-	newRepository = remote.NewRepository
-	newFileStore  = file.New
-	packManifest  = oras.PackManifest
-	copyFunc      = oras.Copy
+	newRepository  = remote.NewRepository
+	newFileStore   = file.New
+	packManifest   = oras.PackManifest
+	copyFunc       = oras.Copy
+	contentFetcher = content.FetchAll
 )
 
 // OCIClient provides an implementation of Client for OCI registries.
@@ -148,44 +149,33 @@ func (c *OCIClient) Pull(ctx context.Context, reference string) ([]byte, error) 
 		return nil, fmt.Errorf("invalid OCI reference: %s", reference)
 	}
 	raw := strings.TrimPrefix(reference, "oci://")
-
 	ref, err := name.ParseReference(raw, name.WithDefaultRegistry(c.cfg.DefaultRegistry))
 	if err != nil {
 		return nil, err
 	}
-
 	repoRef := ref.Context()
 	repo, err := newRepository(repoRef.RegistryStr() + "/" + repoRef.RepositoryStr())
 	if err != nil {
 		return nil, err
 	}
-
 	key := config.NormalizeKey(repoRef.RegistryStr())
 	user := viper.GetString("registries." + key + ".username")
 	pass := viper.GetString("registries." + key + ".password")
 	if user != "" || pass != "" {
-		repo.Client = &auth.Client{
-			Client:     retry.DefaultClient,
-			Cache:      auth.NewCache(),
-			Credential: auth.StaticCredential(repoRef.RegistryStr(), auth.Credential{Username: user, Password: pass}),
-		}
+		repo.Client = &auth.Client{Client: retry.DefaultClient, Cache: auth.NewCache(),
+			Credential: auth.StaticCredential(repoRef.RegistryStr(), auth.Credential{Username: user, Password: pass})}
 	}
 
 	store := memory.New()
-	if _, err := copyFunc(ctx, repo, ref.Identifier(), store, ref.Identifier(), oras.DefaultCopyOptions); err != nil {
-		return nil, err
-	}
-
-	manifestDesc, err := store.Resolve(ctx, ref.Identifier())
+	manifestDesc, err := copyFunc(ctx, repo, ref.Identifier(), store, ref.Identifier(), oras.DefaultCopyOptions)
 	if err != nil {
 		return nil, err
 	}
 
-	manifestBytes, err := content.FetchAll(ctx, store, manifestDesc)
+	manifestBytes, err := contentFetcher(ctx, store, manifestDesc)
 	if err != nil {
 		return nil, err
 	}
-
 	var manifest v1.Manifest
 	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
 		return nil, err
@@ -195,10 +185,9 @@ func (c *OCIClient) Pull(ctx context.Context, reference string) ([]byte, error) 
 	}
 
 	layerDesc := manifest.Layers[0]
-	data, err := content.FetchAll(ctx, store, layerDesc)
+	data, err := contentFetcher(ctx, store, layerDesc)
 	if err != nil {
 		return nil, err
 	}
-
 	return data, nil
 }

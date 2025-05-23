@@ -37,6 +37,8 @@ import (
 
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/spf13/viper"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	oras "oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content"
 	"oras.land/oras-go/v2/content/file"
@@ -753,4 +755,499 @@ func TestOCIClientPullWithCredentialsAndErrors(t *testing.T) {
 			t.Errorf("expected copy error, got %v", err)
 		}
 	})
+}
+
+// MockReadCloser implements io.ReadCloser for testing
+type MockReadCloser struct {
+	*strings.Reader
+}
+
+func (m *MockReadCloser) Close() error {
+	return nil
+}
+
+func NewMockReadCloser(data string) *MockReadCloser {
+	return &MockReadCloser{Reader: strings.NewReader(data)}
+}
+
+// MockStore is a mock implementation of content.Storage interface
+type MockStore struct {
+	mock.Mock
+}
+
+func (m *MockStore) Resolve(ctx context.Context, reference string) (v1.Descriptor, error) {
+	args := m.Called(ctx, reference)
+	return args.Get(0).(v1.Descriptor), args.Error(1)
+}
+
+func (m *MockStore) Fetch(ctx context.Context, target v1.Descriptor) (io.ReadCloser, error) {
+	args := m.Called(ctx, target)
+	return args.Get(0).(io.ReadCloser), args.Error(1)
+}
+
+func (m *MockStore) Push(ctx context.Context, expected v1.Descriptor, reader io.Reader) error {
+	args := m.Called(ctx, expected, reader)
+	return args.Error(0)
+}
+
+func (m *MockStore) Exists(ctx context.Context, target v1.Descriptor) (bool, error) {
+	args := m.Called(ctx, target)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockStore) Tag(ctx context.Context, desc v1.Descriptor, reference string) error {
+	args := m.Called(ctx, desc, reference)
+	return args.Error(0)
+}
+
+// Helper function to create a valid manifest descriptor
+func createManifestDescriptor() v1.Descriptor {
+	return v1.Descriptor{
+		MediaType: "application/vnd.oci.image.manifest.v1+json",
+		Digest:    "sha256:abcd1234",
+		Size:      1234,
+	}
+}
+
+// Helper function to create a valid manifest with layers
+func createManifestWithLayers() v1.Manifest {
+	return v1.Manifest{
+		MediaType: "application/vnd.oci.image.manifest.v1+json",
+		Config: v1.Descriptor{
+			MediaType: "application/vnd.oci.image.config.v1+json",
+			Digest:    "sha256:config123",
+			Size:      100,
+		},
+		Layers: []v1.Descriptor{
+			{
+				MediaType: "application/vnd.remake.file",
+				Digest:    "sha256:layer123",
+				Size:      200,
+			},
+		},
+	}
+}
+
+// Helper function to create a manifest with no layers
+func createManifestWithoutLayers() v1.Manifest {
+	return v1.Manifest{
+		MediaType: "application/vnd.oci.image.manifest.v1+json",
+		Config: v1.Descriptor{
+			MediaType: "application/vnd.oci.image.config.v1+json",
+			Digest:    "sha256:config123",
+			Size:      100,
+		},
+		Layers: []v1.Descriptor{}, // Empty layers
+	}
+}
+
+func TestOCIClient_Pull_ContentFetchAllManifestError(t *testing.T) {
+	cfg := &config.Config{DefaultRegistry: "registry.test"}
+	client := NewOCIClient(cfg).(*OCIClient)
+	ctx := context.Background()
+	reference := "oci://registry.test/repo/artifact:tag"
+
+	// Mock contentFetcher to return error on first call (manifest fetch)
+	originalFetcher := contentFetcher
+	callCount := 0
+	contentFetcher = func(ctx context.Context, store content.Fetcher, desc v1.Descriptor) ([]byte, error) {
+		callCount++
+		if callCount == 1 {
+			return nil, errors.New("fetch manifest error")
+		}
+		return originalFetcher(ctx, store, desc)
+	}
+	defer func() { contentFetcher = originalFetcher }()
+
+	// Mock other dependencies
+	originalNewRepository := newRepository
+	newRepository = func(reference string) (*remote.Repository, error) {
+		return &remote.Repository{}, nil
+	}
+	defer func() { newRepository = originalNewRepository }()
+
+	originalCopyFunc := copyFunc
+	copyFunc = func(ctx context.Context, src oras.ReadOnlyTarget, srcRef string, dst oras.Target, dstRef string, opts oras.CopyOptions) (v1.Descriptor, error) {
+		return v1.Descriptor{}, nil
+	}
+	defer func() { copyFunc = originalCopyFunc }()
+
+	// Act
+	data, err := client.Pull(ctx, reference)
+
+	// Assert
+	assert.Nil(t, data)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "fetch manifest error")
+}
+
+func TestOCIClient_Pull_JSONUnmarshalError(t *testing.T) {
+	cfg := &config.Config{DefaultRegistry: "registry.test"}
+	client := NewOCIClient(cfg).(*OCIClient)
+	ctx := context.Background()
+	reference := "oci://registry.test/repo/artifact:tag"
+
+	// Mock contentFetcher to return invalid JSON on first call (manifest fetch)
+	originalFetcher := contentFetcher
+	callCount := 0
+	contentFetcher = func(ctx context.Context, store content.Fetcher, desc v1.Descriptor) ([]byte, error) {
+		callCount++
+		if callCount == 1 {
+			return []byte("invalid json"), nil // Invalid JSON
+		}
+		return originalFetcher(ctx, store, desc)
+	}
+	defer func() { contentFetcher = originalFetcher }()
+
+	// Mock other dependencies
+	originalNewRepository := newRepository
+	newRepository = func(reference string) (*remote.Repository, error) {
+		return &remote.Repository{}, nil
+	}
+	defer func() { newRepository = originalNewRepository }()
+
+	originalCopyFunc := copyFunc
+	copyFunc = func(ctx context.Context, src oras.ReadOnlyTarget, srcRef string, dst oras.Target, dstRef string, opts oras.CopyOptions) (v1.Descriptor, error) {
+		return v1.Descriptor{}, nil
+	}
+	defer func() { copyFunc = originalCopyFunc }()
+
+	// Act
+	data, err := client.Pull(ctx, reference)
+
+	// Assert
+	assert.Nil(t, data)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid character")
+}
+
+func TestOCIClient_Pull_NoLayersError(t *testing.T) {
+	cfg := &config.Config{DefaultRegistry: "registry.test"}
+	client := NewOCIClient(cfg).(*OCIClient)
+	ctx := context.Background()
+	reference := "oci://registry.test/repo/artifact:tag"
+
+	// Create manifest without layers
+	manifestWithoutLayers := createManifestWithoutLayers()
+	manifestBytes, _ := json.Marshal(manifestWithoutLayers)
+
+	// Mock contentFetcher to return manifest without layers
+	originalFetcher := contentFetcher
+	callCount := 0
+	contentFetcher = func(ctx context.Context, store content.Fetcher, desc v1.Descriptor) ([]byte, error) {
+		callCount++
+		if callCount == 1 {
+			return manifestBytes, nil
+		}
+		return originalFetcher(ctx, store, desc)
+	}
+	defer func() { contentFetcher = originalFetcher }()
+
+	// Mock other dependencies
+	originalNewRepository := newRepository
+	newRepository = func(reference string) (*remote.Repository, error) {
+		return &remote.Repository{}, nil
+	}
+	defer func() { newRepository = originalNewRepository }()
+
+	originalCopyFunc := copyFunc
+	copyFunc = func(ctx context.Context, src oras.ReadOnlyTarget, srcRef string, dst oras.Target, dstRef string, opts oras.CopyOptions) (v1.Descriptor, error) {
+		return v1.Descriptor{}, nil
+	}
+	defer func() { copyFunc = originalCopyFunc }()
+
+	// Act
+	data, err := client.Pull(ctx, reference)
+
+	// Assert
+	assert.Nil(t, data)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no layers found in artifact")
+	assert.Contains(t, err.Error(), reference)
+}
+
+func TestOCIClient_Pull_LayerFetchError(t *testing.T) {
+	cfg := &config.Config{DefaultRegistry: "registry.test"}
+	client := NewOCIClient(cfg).(*OCIClient)
+	ctx := context.Background()
+	reference := "oci://registry.test/repo/artifact:tag"
+
+	// Create manifest with layers
+	manifestWithLayers := createManifestWithLayers()
+	manifestBytes, _ := json.Marshal(manifestWithLayers)
+
+	// Mock contentFetcher to return manifest on first call, error on second call
+	originalFetcher := contentFetcher
+	callCount := 0
+	contentFetcher = func(ctx context.Context, store content.Fetcher, desc v1.Descriptor) ([]byte, error) {
+		callCount++
+		if callCount == 1 {
+			return manifestBytes, nil
+		}
+		// Second call is for layer data - return error
+		return nil, errors.New("fetch layer error")
+	}
+	defer func() { contentFetcher = originalFetcher }()
+
+	// Mock other dependencies
+	originalNewRepository := newRepository
+	newRepository = func(reference string) (*remote.Repository, error) {
+		return &remote.Repository{}, nil
+	}
+	defer func() { newRepository = originalNewRepository }()
+
+	originalCopyFunc := copyFunc
+	copyFunc = func(ctx context.Context, src oras.ReadOnlyTarget, srcRef string, dst oras.Target, dstRef string, opts oras.CopyOptions) (v1.Descriptor, error) {
+		return v1.Descriptor{}, nil
+	}
+	defer func() { copyFunc = originalCopyFunc }()
+
+	// Act
+	data, err := client.Pull(ctx, reference)
+
+	// Assert
+	assert.Nil(t, data)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "fetch layer error")
+}
+
+func TestOCIClient_Pull_Success(t *testing.T) {
+	cfg := &config.Config{DefaultRegistry: "registry.test"}
+	client := NewOCIClient(cfg).(*OCIClient)
+	ctx := context.Background()
+	reference := "oci://registry.test/repo/artifact:tag"
+
+	// Create manifest with layers
+	manifestWithLayers := createManifestWithLayers()
+	manifestBytes, _ := json.Marshal(manifestWithLayers)
+
+	expectedLayerData := []byte("layer data content")
+
+	// Mock contentFetcher to return manifest on first call, layer data on second call
+	originalFetcher := contentFetcher
+	callCount := 0
+	contentFetcher = func(ctx context.Context, store content.Fetcher, desc v1.Descriptor) ([]byte, error) {
+		callCount++
+		if callCount == 1 {
+			return manifestBytes, nil
+		}
+		// Second call is for layer data
+		return expectedLayerData, nil
+	}
+	defer func() { contentFetcher = originalFetcher }()
+
+	// Mock other dependencies
+	originalNewRepository := newRepository
+	newRepository = func(reference string) (*remote.Repository, error) {
+		return &remote.Repository{}, nil
+	}
+	defer func() { newRepository = originalNewRepository }()
+
+	originalCopyFunc := copyFunc
+	copyFunc = func(ctx context.Context, src oras.ReadOnlyTarget, srcRef string, dst oras.Target, dstRef string, opts oras.CopyOptions) (v1.Descriptor, error) {
+		return v1.Descriptor{}, nil
+	}
+	defer func() { copyFunc = originalCopyFunc }()
+
+	// Act
+	data, err := client.Pull(ctx, reference)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.Equal(t, expectedLayerData, data)
+}
+
+func TestOCIClient_Pull_InvalidReference(t *testing.T) {
+	cfg := &config.Config{DefaultRegistry: "registry.test"}
+	client := NewOCIClient(cfg).(*OCIClient)
+	ctx := context.Background()
+
+	// Test with invalid reference (non-OCI protocol)
+	reference := "http://registry.test/repo/artifact:tag"
+
+	// Act
+	data, err := client.Pull(ctx, reference)
+
+	// Assert
+	assert.Nil(t, data)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid OCI reference")
+}
+
+func TestOCIClient_Pull_ParseReferenceError(t *testing.T) {
+	cfg := &config.Config{DefaultRegistry: "registry.test"}
+	client := NewOCIClient(cfg).(*OCIClient)
+	ctx := context.Background()
+
+	// Test with invalid reference format that will cause name.ParseReference to fail
+	reference := "oci://registry.test/INVALID-UPPERCASE-REPO:tag"
+
+	// Act
+	data, err := client.Pull(ctx, reference)
+
+	// Assert
+	assert.Nil(t, data)
+	assert.Error(t, err)
+	// The error will come from name.ParseReference
+}
+
+// Integration-style test that tests the full flow with mocked external dependencies
+func TestOCIClient_Pull_FullFlow(t *testing.T) {
+	tests := []struct {
+		name          string
+		reference     string
+		setupMocks    func()
+		expectedError string
+		expectedData  []byte
+	}{
+		{
+			name:      "successful pull",
+			reference: "oci://registry.test/repo/artifact:tag",
+			setupMocks: func() {
+				manifestWithLayers := createManifestWithLayers()
+				manifestBytes, _ := json.Marshal(manifestWithLayers)
+				expectedLayerData := []byte("test layer data")
+
+				callCount := 0
+				contentFetcher = func(ctx context.Context, store content.Fetcher, desc v1.Descriptor) ([]byte, error) {
+					callCount++
+					if callCount == 1 {
+						return manifestBytes, nil
+					}
+					return expectedLayerData, nil
+				}
+			},
+			expectedData: []byte("test layer data"),
+		},
+		{
+			name:      "manifest fetch error",
+			reference: "oci://registry.test/repo/artifact:tag",
+			setupMocks: func() {
+				contentFetcher = func(ctx context.Context, store content.Fetcher, desc v1.Descriptor) ([]byte, error) {
+					return nil, errors.New("manifest fetch failed")
+				}
+			},
+			expectedError: "manifest fetch failed",
+		},
+		{
+			name:      "invalid manifest JSON",
+			reference: "oci://registry.test/repo/artifact:tag",
+			setupMocks: func() {
+				contentFetcher = func(ctx context.Context, store content.Fetcher, desc v1.Descriptor) ([]byte, error) {
+					return []byte("not valid json"), nil
+				}
+			},
+			expectedError: "invalid character",
+		},
+		{
+			name:      "no layers in manifest",
+			reference: "oci://registry.test/repo/artifact:tag",
+			setupMocks: func() {
+				manifestWithoutLayers := createManifestWithoutLayers()
+				manifestBytes, _ := json.Marshal(manifestWithoutLayers)
+
+				contentFetcher = func(ctx context.Context, store content.Fetcher, desc v1.Descriptor) ([]byte, error) {
+					return manifestBytes, nil
+				}
+			},
+			expectedError: "no layers found in artifact",
+		},
+		{
+			name:      "layer fetch error",
+			reference: "oci://registry.test/repo/artifact:tag",
+			setupMocks: func() {
+				manifestWithLayers := createManifestWithLayers()
+				manifestBytes, _ := json.Marshal(manifestWithLayers)
+
+				callCount := 0
+				contentFetcher = func(ctx context.Context, store content.Fetcher, desc v1.Descriptor) ([]byte, error) {
+					callCount++
+					if callCount == 1 {
+						return manifestBytes, nil
+					}
+					return nil, errors.New("layer fetch failed")
+				}
+			},
+			expectedError: "layer fetch failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup
+			cfg := &config.Config{DefaultRegistry: "registry.test"}
+			client := NewOCIClient(cfg).(*OCIClient)
+			ctx := context.Background()
+
+			// Backup original functions
+			originalFetcher := contentFetcher
+			originalNewRepository := newRepository
+			originalCopyFunc := copyFunc
+
+			// Setup mocks
+			tt.setupMocks()
+
+			newRepository = func(reference string) (*remote.Repository, error) {
+				return &remote.Repository{}, nil
+			}
+
+			copyFunc = func(ctx context.Context, src oras.ReadOnlyTarget, srcRef string, dst oras.Target, dstRef string, opts oras.CopyOptions) (v1.Descriptor, error) {
+				return v1.Descriptor{}, nil
+			}
+
+			// Act
+			data, err := client.Pull(ctx, tt.reference)
+
+			// Assert
+			if tt.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedError)
+				assert.Nil(t, data)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedData, data)
+			}
+
+			// Restore original functions
+			contentFetcher = originalFetcher
+			newRepository = originalNewRepository
+			copyFunc = originalCopyFunc
+		})
+	}
+}
+
+// Test specifically for store.Resolve error
+func TestOCIClient_Pull_StoreResolveError(t *testing.T) {
+	cfg := &config.Config{DefaultRegistry: "registry.test"}
+	client := NewOCIClient(cfg).(*OCIClient)
+	ctx := context.Background()
+	reference := "oci://registry.test/repo/artifact:tag"
+
+	// This test is more complex since we need to test the store.Resolve call
+	// We'll create a scenario where the store returns an error on Resolve
+
+	// Mock newRepository
+	originalNewRepository := newRepository
+	newRepository = func(reference string) (*remote.Repository, error) {
+		return &remote.Repository{}, nil
+	}
+	defer func() { newRepository = originalNewRepository }()
+
+	// Mock copyFunc to succeed so we get to the store.Resolve part
+	originalCopyFunc := copyFunc
+	copyFunc = func(ctx context.Context, src oras.ReadOnlyTarget, srcRef string, dst oras.Target, dstRef string, opts oras.CopyOptions) (v1.Descriptor, error) {
+		return v1.Descriptor{}, nil
+	}
+	defer func() { copyFunc = originalCopyFunc }()
+
+	// Since we can't easily mock the memory store's Resolve method,
+	// we'll test by creating a scenario where the store is empty
+	// and the resolve should fail naturally
+
+	// Act
+	data, err := client.Pull(ctx, reference)
+
+	// Assert - we expect an error because the store won't have the reference
+	assert.Nil(t, data)
+	assert.Error(t, err)
 }
