@@ -128,7 +128,7 @@ func (c *OCIRepository) Pull(ctx context.Context, reference string) (string, err
 	tagPath := filepath.Join(c.cfg.CacheDir, domain, repo, "refs", ref.Identifier())
 	if info, err := os.Lstat(tagPath); err == nil {
 		if info.Mode()&os.ModeSymlink != 0 {
-			target, err := os.Readlink(tagPath)
+			target, err := readLink(tagPath)
 			if err != nil {
 				return "", err
 			}

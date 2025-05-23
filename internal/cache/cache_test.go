@@ -745,3 +745,36 @@ func TestOCIRepositoryPushRefsDirMkdirError(t *testing.T) {
 		t.Errorf("expected mkdir error, got %v", err)
 	}
 }
+
+func TestOCIRepositoryPullReadlinkErrorBranch(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "oci_readlinkerr")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := &config.Config{CacheDir: tmpDir, DefaultRegistry: "reg.io"}
+	c := NewOCIRepository(cfg)
+
+	ref := "reg.io/repo:latest"
+	raw := strings.TrimPrefix(ref, "oci://")
+	refObj, _ := name.ParseReference(raw, name.WithDefaultRegistry(cfg.DefaultRegistry))
+	refDir := filepath.Join(tmpDir, refObj.Context().RegistryStr(), refObj.Context().RepositoryStr(), "refs")
+	if err := os.MkdirAll(refDir, 0o755); err != nil {
+		t.Fatalf("failed to mkdir refs: %v", err)
+	}
+	tagPath := filepath.Join(refDir, refObj.Identifier())
+	if err := os.Symlink("dummy", tagPath); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	readLink = func(name string) (string, error) {
+		return "", fmt.Errorf("readlink error")
+	}
+	defer restoreFactories()
+
+	_, err = c.Pull(context.Background(), ref)
+	if err == nil || !strings.Contains(err.Error(), "readlink error") {
+		t.Errorf("expected readlink error, got %v", err)
+	}
+}
