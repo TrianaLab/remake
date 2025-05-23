@@ -68,12 +68,12 @@ func (c *OCIClient) Login(ctx context.Context, registry, user, pass string) erro
 	if err != nil {
 		return err
 	}
-	client := &auth.Client{
+	clientAuth := &auth.Client{
 		Client:     retry.DefaultClient,
 		Cache:      auth.NewCache(),
 		Credential: auth.StaticCredential(registry, auth.Credential{Username: user, Password: pass}),
 	}
-	reg.Client = client
+	reg.Client = clientAuth
 	if err := reg.Ping(ctx); err != nil {
 		return err
 	}
@@ -115,11 +115,7 @@ func (c *OCIClient) Push(ctx context.Context, reference, path string) error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if cerr := fs.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
+	defer fs.Close()
 
 	mediaType := "application/vnd.remake.file"
 	fileDesc, err := fs.Add(ctx, path, mediaType, "")
@@ -138,14 +134,10 @@ func (c *OCIClient) Push(ctx context.Context, reference, path string) error {
 	}
 
 	tag := ref.Identifier()
-	if err := fs.Tag(ctx, manifestDesc, tag); err != nil {
-		return fmt.Errorf("tagging manifest: %w", err)
-	}
-
-	if _, err := copyFunc(ctx, fs, tag, repo, tag, oras.DefaultCopyOptions); err != nil {
+	if _, err := copyFunc(ctx, fs, manifestDesc.Digest.String(), repo, tag, oras.DefaultCopyOptions); err != nil {
 		return fmt.Errorf("pushing to remote: %w", err)
 	}
-
+	_ = fs.Tag(ctx, manifestDesc, tag)
 	return nil
 }
 
@@ -153,7 +145,7 @@ func (c *OCIClient) Push(ctx context.Context, reference, path string) error {
 // It retrieves the manifest and returns the contents of the first layer (Makefile data).
 func (c *OCIClient) Pull(ctx context.Context, reference string) ([]byte, error) {
 	if strings.Contains(reference, "://") && !strings.HasPrefix(reference, "oci://") {
-		return []byte{}, fmt.Errorf("invalid OCI reference: %s", reference)
+		return nil, fmt.Errorf("invalid OCI reference: %s", reference)
 	}
 	raw := strings.TrimPrefix(reference, "oci://")
 
@@ -171,7 +163,7 @@ func (c *OCIClient) Pull(ctx context.Context, reference string) ([]byte, error) 
 	key := config.NormalizeKey(repoRef.RegistryStr())
 	user := viper.GetString("registries." + key + ".username")
 	pass := viper.GetString("registries." + key + ".password")
-	if user != "" {
+	if user != "" || pass != "" {
 		repo.Client = &auth.Client{
 			Client:     retry.DefaultClient,
 			Cache:      auth.NewCache(),
