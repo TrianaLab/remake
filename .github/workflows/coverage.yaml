@@ -1,15 +1,12 @@
-name: CI
+name: Coverage
 
 on:
-  pull_request:
+  push:
     branches:
       - main
 
-permissions:
-  contents: read
-
 jobs:
-  test-and-lint:
+  coverage:
     runs-on: ubuntu-latest
 
     steps:
@@ -31,9 +28,11 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Run tests
-        run: go test ./...
+      - name: Run tests with coverage
+        run: go test ./... -coverprofile=coverage.out
 
-      - name: Run linter
-        uses: golangci/golangci-lint-action@v8
-
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: coverage.out
+          fail_ci_if_error: true
