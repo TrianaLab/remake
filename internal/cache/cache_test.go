@@ -34,6 +34,7 @@ import (
 	"testing"
 
 	"github.com/TrianaLab/remake/config"
+	"github.com/google/go-containerregistry/pkg/name"
 )
 
 var (
@@ -630,8 +631,40 @@ func TestOCIRepositoryPushSymlinkError(t *testing.T) {
 	}
 }
 
-func TestOCIRepositoryPullDigestFallback(t *testing.T) {
-	tmp, err := os.MkdirTemp("", "cacheoci")
+func TestOCIRepositoryPushParseRefError(t *testing.T) {
+	parseRef = func(s string, opts ...name.Option) (name.Reference, error) {
+		return nil, fmt.Errorf("parse error")
+	}
+	defer restoreFactories()
+
+	cfg := &config.Config{CacheDir: os.TempDir(), DefaultRegistry: "reg.io"}
+	c := NewOCIRepository(cfg)
+	err := c.Push(context.Background(), "reg.io/repo:tag", []byte("x"))
+	if err == nil || !strings.Contains(err.Error(), "parse error") {
+		t.Errorf("expected parse error, got %v", err)
+	}
+}
+
+func TestOCIRepositoryPullInvalidReference(t *testing.T) {
+	cfg := &config.Config{CacheDir: os.TempDir(), DefaultRegistry: "reg.io"}
+	c := NewOCIRepository(cfg)
+	_, err := c.Pull(context.Background(), "://badref")
+	if err == nil {
+		t.Error("expected invalid reference error, got nil")
+	}
+}
+
+func TestOCIRepositoryPullParseRefError(t *testing.T) {
+	cfg := &config.Config{CacheDir: os.TempDir(), DefaultRegistry: "reg.io"}
+	c := NewOCIRepository(cfg)
+	_, err := c.Pull(context.Background(), "oci://invalid@@@")
+	if err == nil {
+		t.Error("expected parse error on Pull, got nil")
+	}
+}
+
+func TestOCIRepositoryPullNotSymlink(t *testing.T) {
+	tmp, err := os.MkdirTemp("", "ocitestnonsymlink")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -640,20 +673,75 @@ func TestOCIRepositoryPullDigestFallback(t *testing.T) {
 	cfg := &config.Config{CacheDir: tmp, DefaultRegistry: "reg.io"}
 	c := NewOCIRepository(cfg)
 
-	data := []byte("blobcontent")
+	ref := "reg.io/myrepo:latest"
+	raw := strings.TrimPrefix(ref, "oci://")
+	refObj, _ := name.ParseReference(raw, name.WithDefaultRegistry(cfg.DefaultRegistry))
+	dir := filepath.Join(tmp, refObj.Context().RegistryStr(), refObj.Context().RepositoryStr(), "refs")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("failed to mkdir refs: %v", err)
+	}
+	path := filepath.Join(dir, refObj.Identifier())
+	if err := os.WriteFile(path, []byte("plain"), 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	got, err := c.Pull(context.Background(), ref)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if got != path {
+		t.Errorf("expected path %s, got %s", path, got)
+	}
+}
+
+func TestOCIRepositoryPullDigestFallback(t *testing.T) {
+	tmp, err := os.MkdirTemp("", "ocitestfallback")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmp)
+
+	cfg := &config.Config{CacheDir: tmp, DefaultRegistry: "reg.io"}
+	c := NewOCIRepository(cfg)
+
+	data := []byte("blobdata")
 	ref := "reg.io/myrepo:latest"
 	if err := c.Push(context.Background(), ref, data); err != nil {
-		t.Fatalf("OCI Push error: %v", err)
+		t.Fatalf("Push error: %v", err)
 	}
-	os.Remove(filepath.Join(tmp, "reg.io", "myrepo", "refs", "latest"))
+	raw := strings.TrimPrefix(ref, "oci://")
+	refObj, _ := name.ParseReference(raw, name.WithDefaultRegistry(cfg.DefaultRegistry))
+	link := filepath.Join(tmp, refObj.Context().RegistryStr(), refObj.Context().RepositoryStr(), "refs", refObj.Identifier())
+	os.Remove(link)
+
 	sum := sha256.Sum256(data)
 	digest := "sha256:" + hex.EncodeToString(sum[:])
-
 	got, err := c.Pull(context.Background(), "reg.io/myrepo@"+digest)
 	if err != nil {
-		t.Fatalf("expected to fallback to blob path, got error: %v", err)
+		t.Fatalf("expected fallback to blob, got error: %v", err)
 	}
 	if !strings.HasSuffix(got, digest) {
 		t.Errorf("expected blob path ending in %s, got %s", digest, got)
+	}
+}
+
+func TestOCIRepositoryPushRefsDirMkdirError(t *testing.T) {
+	parseRef = func(s string, opts ...name.Option) (name.Reference, error) {
+		ref, _ := name.ParseReference("reg.io/repo:tag", name.WithDefaultRegistry("reg.io"))
+		return ref, nil
+	}
+	mkdirAll = func(path string, perm os.FileMode) error {
+		if strings.HasSuffix(path, filepath.Join("repo", "refs")) {
+			return fmt.Errorf("mkdir error")
+		}
+		return os.MkdirAll(path, perm)
+	}
+	defer restoreFactories()
+
+	cfg := &config.Config{CacheDir: os.TempDir(), DefaultRegistry: "reg.io"}
+	c := NewOCIRepository(cfg)
+	err := c.Push(context.Background(), "reg.io/repo:tag", []byte("data"))
+	if err == nil || !strings.Contains(err.Error(), "mkdir error") {
+		t.Errorf("expected mkdir error, got %v", err)
 	}
 }
