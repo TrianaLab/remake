@@ -1,24 +1,3 @@
-// The MIT License (MIT)
-//
-// Copyright © 2025 TrianaLab - Eduardo Diaz <edudiazasencio@gmail.com>
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// THE SOFTWARE.
-
 package client
 
 import (
@@ -51,7 +30,7 @@ func (h *HTTPClient) Push(ctx context.Context, reference, path string) error {
 
 // Pull performs an HTTP GET request to fetch the artifact data from the given URL.
 // It returns the raw response body bytes or an error on non-200 status codes or failures.
-func (h *HTTPClient) Pull(ctx context.Context, reference string) ([]byte, error) {
+func (h *HTTPClient) Pull(ctx context.Context, reference string) (data []byte, err error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reference, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP request for %s: %w", reference, err)
@@ -72,10 +51,11 @@ func (h *HTTPClient) Pull(ctx context.Context, reference string) ([]byte, error)
 		return nil, fmt.Errorf("unexpected status code %d when fetching %s", resp.StatusCode, reference)
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	// Read body using named return variable so defer CloseErr can override
+	data, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read HTTP response body for %s: %w", reference, err)
 	}
 
-	return data, nil
+	return
 }
