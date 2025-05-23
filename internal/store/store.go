@@ -1,24 +1,3 @@
-// The MIT License (MIT)
-//
-// Copyright © 2025 TrianaLab - Eduardo Diaz <edudiazasencio@gmail.com>
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// THE SOFTWARE.
-
 package store
 
 import (
@@ -29,6 +8,12 @@ import (
 	"github.com/TrianaLab/remake/config"
 	"github.com/TrianaLab/remake/internal/cache"
 	"github.com/TrianaLab/remake/internal/client"
+)
+
+// overrideable constructors for testing
+var (
+	newClient = client.NewClient
+	newCache  = cache.NewCache
 )
 
 // Store defines the interface for login, push, and pull operations
@@ -58,8 +43,8 @@ func New(cfg *config.Config) Store {
 
 // Login authenticates to the remote registry using the configured registry client.
 func (s *ArtifactStore) Login(ctx context.Context, reg, user, pass string) error {
-	client := client.NewClient(s.cfg, reg)
-	return client.Login(ctx, reg, user, pass)
+	c := newClient(s.cfg, reg)
+	return c.Login(ctx, reg, user, pass)
 }
 
 // Push uploads and caches a Makefile artifact based on its reference type.
@@ -72,8 +57,8 @@ func (s *ArtifactStore) Push(ctx context.Context, reference, path string) error 
 	case config.ReferenceLocal:
 		return fmt.Errorf("pushing local references is not supported")
 	case config.ReferenceOCI:
-		client := client.NewClient(s.cfg, reference)
-		if err := client.Push(ctx, reference, path); err != nil {
+		c := newClient(s.cfg, reference)
+		if err := c.Push(ctx, reference, path); err != nil {
 			return err
 		}
 		// Read file data for caching
@@ -81,7 +66,7 @@ func (s *ArtifactStore) Push(ctx context.Context, reference, path string) error 
 		if err != nil {
 			return err
 		}
-		cacheRepo := cache.NewCache(s.cfg, reference)
+		cacheRepo := newCache(s.cfg, reference)
 		return cacheRepo.Push(ctx, reference, data)
 	default:
 		return fmt.Errorf("unknown reference type for %s", reference)
@@ -98,15 +83,14 @@ func (s *ArtifactStore) Pull(ctx context.Context, reference string) (string, err
 		return reference, nil
 	default:
 		// Attempt cache lookup
-		cacheRepo := cache.NewCache(s.cfg, reference)
+		cacheRepo := newCache(s.cfg, reference)
 		if !s.cfg.NoCache {
 			if path, err := cacheRepo.Pull(ctx, reference); err == nil {
 				return path, nil
 			}
 		}
-		// Fetch from remote registry
-		client := client.NewClient(s.cfg, reference)
-		data, err := client.Pull(ctx, reference)
+		c := newClient(s.cfg, reference)
+		data, err := c.Pull(ctx, reference)
 		if err != nil {
 			return "", err
 		}

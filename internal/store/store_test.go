@@ -22,7 +22,9 @@
 package store
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -32,7 +34,39 @@ import (
 	"testing"
 
 	"github.com/TrianaLab/remake/config"
+	"github.com/TrianaLab/remake/internal/cache"
+	"github.com/TrianaLab/remake/internal/client"
 )
+
+type fakeClient struct {
+	pullFunc func(ctx context.Context, reference string) ([]byte, error)
+	pushFunc func(ctx context.Context, reference, path string) error
+}
+
+func (f *fakeClient) Login(ctx context.Context, registry, user, pass string) error {
+	return nil
+}
+
+func (f *fakeClient) Push(ctx context.Context, reference, path string) error {
+	return f.pushFunc(ctx, reference, path)
+}
+
+func (f *fakeClient) Pull(ctx context.Context, reference string) ([]byte, error) {
+	return f.pullFunc(ctx, reference)
+}
+
+type fakeCache struct {
+	pushFunc func(ctx context.Context, reference string, data []byte) error
+	pullFunc func(ctx context.Context, reference string) (string, error)
+}
+
+func (f *fakeCache) Push(ctx context.Context, reference string, data []byte) error {
+	return f.pushFunc(ctx, reference, data)
+}
+
+func (f *fakeCache) Pull(ctx context.Context, reference string) (string, error) {
+	return f.pullFunc(ctx, reference)
+}
 
 func TestStoreLoginHTTP(t *testing.T) {
 	cfg := &config.Config{}
@@ -121,5 +155,102 @@ func TestStorePullHTTP(t *testing.T) {
 	}
 	if string(data) != "hello" {
 		t.Errorf("expected 'hello', got %q", string(data))
+	}
+}
+
+func TestStorePushOCICacheSuccess(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "mk*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.WriteString("all:\n\techo ok")
+	tmpFile.Close()
+
+	cfg := &config.Config{DefaultRegistry: "ghcr.io"}
+	s := &ArtifactStore{cfg: cfg}
+	newClient = func(cfg *config.Config, ref string) client.Client {
+		return &fakeClient{
+			pushFunc: func(ctx context.Context, reference, path string) error {
+				return nil
+			},
+		}
+	}
+	newCache = func(cfg *config.Config, reference string) cache.CacheRepository {
+		return &fakeCache{
+			pushFunc: func(ctx context.Context, reference string, data []byte) error {
+				if !bytes.Contains(data, []byte("echo ok")) {
+					t.Error("data content mismatch")
+				}
+				return nil
+			},
+		}
+	}
+	err = s.Push(context.Background(), "oci://ghcr.io/test/repo:latest", tmpFile.Name())
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestStorePullCacheHit(t *testing.T) {
+	cfg := &config.Config{NoCache: false}
+	s := &ArtifactStore{cfg: cfg}
+	expectedPath := "/tmp/dummy.mk"
+
+	newCache = func(cfg *config.Config, reference string) cache.CacheRepository {
+		return &fakeCache{
+			pullFunc: func(ctx context.Context, reference string) (string, error) {
+				return expectedPath, nil
+			},
+		}
+	}
+	path, err := s.Pull(context.Background(), "oci://ghcr.io/test/repo:latest")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if path != expectedPath {
+		t.Errorf("expected path %s, got %s", expectedPath, path)
+	}
+}
+
+func TestStorePullClientError(t *testing.T) {
+	cfg := &config.Config{NoCache: true}
+	s := &ArtifactStore{cfg: cfg}
+	newCache = func(cfg *config.Config, reference string) cache.CacheRepository {
+		return &fakeCache{}
+	}
+	newClient = func(cfg *config.Config, reference string) client.Client {
+		return &fakeClient{
+			pullFunc: func(ctx context.Context, reference string) ([]byte, error) {
+				return nil, errors.New("pull error")
+			},
+		}
+	}
+	_, err := s.Pull(context.Background(), "oci://ghcr.io/test/repo:latest")
+	if err == nil || err.Error() != "pull error" {
+		t.Errorf("expected pull error, got %v", err)
+	}
+}
+
+func TestStorePullCachePushError(t *testing.T) {
+	cfg := &config.Config{NoCache: true}
+	s := &ArtifactStore{cfg: cfg}
+	newClient = func(cfg *config.Config, reference string) client.Client {
+		return &fakeClient{
+			pullFunc: func(ctx context.Context, reference string) ([]byte, error) {
+				return []byte("data"), nil
+			},
+		}
+	}
+	newCache = func(cfg *config.Config, reference string) cache.CacheRepository {
+		return &fakeCache{
+			pushFunc: func(ctx context.Context, reference string, data []byte) error {
+				return errors.New("cache push error")
+			},
+		}
+	}
+	_, err := s.Pull(context.Background(), "oci://ghcr.io/test/repo:latest")
+	if err == nil || err.Error() != "cache push error" {
+		t.Errorf("expected cache push error, got %v", err)
 	}
 }
