@@ -42,6 +42,14 @@ import (
 	"github.com/TrianaLab/remake/config"
 )
 
+// These vars allows us to override functions in tests.
+var (
+	newRepository = remote.NewRepository
+	newFileStore  = file.New
+	packManifest  = oras.PackManifest
+	copyFunc      = oras.Copy
+)
+
 // OCIClient provides an implementation of Client for OCI registries.
 // It uses oras and go-containerregistry to authenticate, push, and pull artifacts.
 type OCIClient struct {
@@ -87,7 +95,7 @@ func (c *OCIClient) Push(ctx context.Context, reference, path string) error {
 		return err
 	}
 	repoRef := ref.Context()
-	repo, err := remote.NewRepository(repoRef.RegistryStr() + "/" + repoRef.RepositoryStr())
+	repo, err := newRepository(repoRef.RegistryStr() + "/" + repoRef.RepositoryStr())
 	if err != nil {
 		return err
 	}
@@ -103,7 +111,7 @@ func (c *OCIClient) Push(ctx context.Context, reference, path string) error {
 	}
 
 	dir := filepath.Dir(path)
-	fs, err := file.New(dir)
+	fs, err := newFileStore(dir)
 	if err != nil {
 		return err
 	}
@@ -121,7 +129,7 @@ func (c *OCIClient) Push(ctx context.Context, reference, path string) error {
 
 	artifactType := "application/vnd.remake.artifact"
 	opts := oras.PackManifestOptions{Layers: []v1.Descriptor{fileDesc}}
-	manifestDesc, err := oras.PackManifest(ctx, fs, oras.PackManifestVersion1_1, artifactType, opts)
+	manifestDesc, err := packManifest(ctx, fs, oras.PackManifestVersion1_1, artifactType, opts)
 	if err != nil {
 		return fmt.Errorf("packing manifest: %w", err)
 	}
@@ -134,7 +142,7 @@ func (c *OCIClient) Push(ctx context.Context, reference, path string) error {
 		return fmt.Errorf("tagging manifest: %w", err)
 	}
 
-	if _, err := oras.Copy(ctx, fs, tag, repo, tag, oras.DefaultCopyOptions); err != nil {
+	if _, err := copyFunc(ctx, fs, tag, repo, tag, oras.DefaultCopyOptions); err != nil {
 		return fmt.Errorf("pushing to remote: %w", err)
 	}
 
@@ -155,7 +163,7 @@ func (c *OCIClient) Pull(ctx context.Context, reference string) ([]byte, error) 
 	}
 
 	repoRef := ref.Context()
-	repo, err := remote.NewRepository(repoRef.RegistryStr() + "/" + repoRef.RepositoryStr())
+	repo, err := newRepository(repoRef.RegistryStr() + "/" + repoRef.RepositoryStr())
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +180,7 @@ func (c *OCIClient) Pull(ctx context.Context, reference string) ([]byte, error) 
 	}
 
 	store := memory.New()
-	if _, err := oras.Copy(ctx, repo, ref.Identifier(), store, ref.Identifier(), oras.DefaultCopyOptions); err != nil {
+	if _, err := copyFunc(ctx, repo, ref.Identifier(), store, ref.Identifier(), oras.DefaultCopyOptions); err != nil {
 		return nil, err
 	}
 

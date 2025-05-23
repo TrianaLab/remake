@@ -25,6 +25,7 @@ package client
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -35,6 +36,7 @@ import (
 
 	"github.com/TrianaLab/remake/config"
 	"github.com/spf13/viper"
+	"oras.land/oras-go/v2/registry/remote"
 	"oras.land/oras-go/v2/registry/remote/retry"
 )
 
@@ -292,5 +294,16 @@ func TestOCIClientPushMissingFile(t *testing.T) {
 	err := client.Push(context.Background(), "oci://example.com/myrepo:latest", "nofile")
 	if err == nil || !strings.Contains(err.Error(), "adding file to store") {
 		t.Errorf("expected file add error, got %v", err)
+	}
+}
+
+func TestPushNewRepositoryError(t *testing.T) {
+	orig := newRepository
+	defer func() { newRepository = orig }()
+	newRepository = func(ref string) (*remote.Repository, error) { return nil, fmt.Errorf("repo error") }
+	client := NewOCIClient(&config.Config{DefaultRegistry: "example.com"})
+	err := client.Push(context.Background(), "oci://example.com/repo:tag", "file.txt")
+	if err == nil || !strings.Contains(err.Error(), "repo error") {
+		t.Errorf("expected repo error, got %v", err)
 	}
 }
