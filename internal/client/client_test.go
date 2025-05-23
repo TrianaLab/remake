@@ -219,16 +219,16 @@ func TestOCIClientLoginSuccess(t *testing.T) {
 
 	cfg := &config.Config{}
 	client := NewOCIClient(cfg)
+	registry := server.Listener.Addr().String()
 
-	hostPort := server.Listener.Addr().String()
 	user := "testuser"
 	pass := "testpass"
-
-	if err := client.Login(context.Background(), hostPort, user, pass); err != nil {
+	err = client.Login(context.Background(), registry, user, pass)
+	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	key := config.NormalizeKey(hostPort)
+	key := config.NormalizeKey(registry)
 	if got := viper.GetString("registries." + key + ".username"); got != user {
 		t.Errorf("expected username %q, got %q", user, got)
 	}
@@ -260,8 +260,37 @@ func TestOCIClientLoginPingError(t *testing.T) {
 	cfg := &config.Config{}
 	client := NewOCIClient(cfg)
 
-	hostPort := server.Listener.Addr().String()
-	if err := client.Login(context.Background(), hostPort, "user", "pass"); err == nil {
+	reference := server.Listener.Addr().String()
+	err = client.Login(context.Background(), reference, "user", "pass")
+	if err == nil {
 		t.Error("expected Ping error, got nil")
+	}
+}
+
+// Tests for Push
+func TestOCIClientPushInvalidScheme(t *testing.T) {
+	cfg := &config.Config{DefaultRegistry: "example.com"}
+	client := NewOCIClient(cfg)
+	err := client.Push(context.Background(), "http://example.com/repo:tag", "path")
+	if err == nil || !strings.Contains(err.Error(), "invalid OCI reference") {
+		t.Errorf("expected invalid OCI reference error, got %v", err)
+	}
+}
+
+func TestOCIClientPushParseError(t *testing.T) {
+	cfg := &config.Config{DefaultRegistry: "example.com"}
+	client := NewOCIClient(cfg)
+	err := client.Push(context.Background(), "oci://not$$invalid/ref", "path")
+	if err == nil {
+		t.Error("expected parse error, got nil")
+	}
+}
+
+func TestOCIClientPushMissingFile(t *testing.T) {
+	cfg := &config.Config{DefaultRegistry: "example.com"}
+	client := NewOCIClient(cfg)
+	err := client.Push(context.Background(), "oci://example.com/myrepo:latest", "nofile")
+	if err == nil || !strings.Contains(err.Error(), "adding file to store") {
+		t.Errorf("expected file add error, got %v", err)
 	}
 }
