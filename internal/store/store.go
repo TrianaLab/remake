@@ -12,8 +12,11 @@ import (
 
 // overrideable constructors for testing
 var (
-	newClient = client.NewClient
-	newCache  = cache.NewCache
+	newClient      = client.NewClient
+	newCache       = cache.NewCache
+	parseReference = func(cfg *config.Config, ref string) config.ReferenceType {
+		return cfg.ParseReference(ref)
+	}
 )
 
 // Store defines the interface for login, push, and pull operations
@@ -51,7 +54,7 @@ func (s *ArtifactStore) Login(ctx context.Context, reg, user, pass string) error
 // For OCI references, it pushes to the registry and then caches the data locally.
 // HTTP and local references are not supported for push operations.
 func (s *ArtifactStore) Push(ctx context.Context, reference, path string) error {
-	switch s.cfg.ParseReference(reference) {
+	switch parseReference(s.cfg, reference) {
 	case config.ReferenceHTTP:
 		return fmt.Errorf("pushing to HTTP(s) references is not supported")
 	case config.ReferenceLocal:
@@ -78,7 +81,7 @@ func (s *ArtifactStore) Push(ctx context.Context, reference, path string) error 
 // it attempts to read from cache (unless NoCache is set), otherwise fetches
 // from the registry and then caches the result.
 func (s *ArtifactStore) Pull(ctx context.Context, reference string) (string, error) {
-	switch s.cfg.ParseReference(reference) {
+	switch parseReference(s.cfg, reference) {
 	case config.ReferenceLocal:
 		return reference, nil
 	default:

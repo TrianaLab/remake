@@ -25,6 +25,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -252,5 +253,58 @@ func TestStorePullCachePushError(t *testing.T) {
 	_, err := s.Pull(context.Background(), "oci://ghcr.io/test/repo:latest")
 	if err == nil || err.Error() != "cache push error" {
 		t.Errorf("expected cache push error, got %v", err)
+	}
+}
+
+func TestPushReadFileError(t *testing.T) {
+	cfg := &config.Config{}
+	s := &ArtifactStore{cfg: cfg}
+
+	newClient = func(cfg *config.Config, ref string) client.Client {
+		return &fakeClient{
+			pushFunc: func(ctx context.Context, reference, path string) error {
+				return nil
+			},
+		}
+	}
+
+	newCache = func(cfg *config.Config, ref string) cache.CacheRepository {
+		return &fakeCache{
+			pushFunc: func(ctx context.Context, reference string, data []byte) error {
+				t.Error("cache.Push no debería ser llamado")
+				return nil
+			},
+		}
+	}
+
+	reference := "oci://ghcr.io/test/repo:tag"
+	path := "no_existe.mk"
+	err := s.Push(context.Background(), reference, path)
+	if err == nil {
+		t.Fatalf("expected error for missing file, got nil")
+	}
+	if !os.IsNotExist(err) && !strings.Contains(err.Error(), "no such file or directory") {
+		t.Fatalf("expected file-not-found error, got %v", err)
+	}
+}
+
+func TestPushUnknownReferenceType(t *testing.T) {
+	cfg := &config.Config{}
+	s := &ArtifactStore{cfg: cfg}
+
+	parseReference = func(cfg *config.Config, ref string) config.ReferenceType {
+		return config.ReferenceType(999)
+	}
+	defer func() {
+		parseReference = func(cfg *config.Config, ref string) config.ReferenceType {
+			return cfg.ParseReference(ref)
+		}
+	}()
+
+	reference := "wei://example.com/whatever"
+	err := s.Push(context.Background(), reference, "makefile")
+	expected := fmt.Sprintf("unknown reference type for %s", reference)
+	if err == nil || err.Error() != expected {
+		t.Fatalf("expected error %q, got %v", expected, err)
 	}
 }
