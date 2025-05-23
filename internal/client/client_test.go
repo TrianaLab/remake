@@ -17,6 +17,7 @@
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
 package client
@@ -24,7 +25,6 @@ package client
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -34,6 +34,8 @@ import (
 	"testing"
 
 	"github.com/TrianaLab/remake/config"
+	"github.com/spf13/viper"
+	"oras.land/oras-go/v2/registry/remote/retry"
 )
 
 type badBody struct{}
@@ -167,7 +169,6 @@ func TestHTTPClientPullNonOK(t *testing.T) {
 
 	h := NewHTTPClient()
 	_, err := h.Pull(context.Background(), server.URL)
-	_ = fmt.Errorf("unexpected status code %d when fetching %s", http.StatusNotFound, server.URL)
 	if err == nil || !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
 		t.Errorf("expected non-200 status code error, got %v", err)
 	}
@@ -193,5 +194,74 @@ func TestHTTPClientPullCloseError(t *testing.T) {
 	}
 	if err == nil || err.Error() != "close error" {
 		t.Errorf("expected close error, got %v", err)
+	}
+}
+
+func TestOCIClientLoginSuccess(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v2/" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	tmpFile, err := os.CreateTemp("", "config*.yaml")
+	if err != nil {
+		t.Fatalf("failed to create temp config file: %v", err)
+	}
+	tmpFile.Close()
+	defer os.Remove(tmpFile.Name())
+	viper.SetConfigFile(tmpFile.Name())
+
+	retry.DefaultClient = server.Client()
+
+	cfg := &config.Config{}
+	client := NewOCIClient(cfg)
+
+	hostPort := server.Listener.Addr().String()
+	user := "testuser"
+	pass := "testpass"
+
+	if err := client.Login(context.Background(), hostPort, user, pass); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	key := config.NormalizeKey(hostPort)
+	if got := viper.GetString("registries." + key + ".username"); got != user {
+		t.Errorf("expected username %q, got %q", user, got)
+	}
+	if got := viper.GetString("registries." + key + ".password"); got != pass {
+		t.Errorf("expected password %q, got %q", pass, got)
+	}
+}
+
+func TestOCIClientLoginPingError(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v2/" {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	tmpFile, err := os.CreateTemp("", "config*.yaml")
+	if err != nil {
+		t.Fatalf("failed to create temp config file: %v", err)
+	}
+	tmpFile.Close()
+	defer os.Remove(tmpFile.Name())
+	viper.SetConfigFile(tmpFile.Name())
+
+	retry.DefaultClient = server.Client()
+
+	cfg := &config.Config{}
+	client := NewOCIClient(cfg)
+
+	hostPort := server.Listener.Addr().String()
+	if err := client.Login(context.Background(), hostPort, "user", "pass"); err == nil {
+		t.Error("expected Ping error, got nil")
 	}
 }
