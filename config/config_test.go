@@ -40,8 +40,8 @@ func capture(f func()) (string, string) {
 
 	f()
 
-	wOut.Close()
-	wErr.Close()
+	_ = wOut.Close()
+	_ = wErr.Close()
 	outBytes, _ := io.ReadAll(rOut)
 	errBytes, _ := io.ReadAll(rErr)
 	os.Stdout, os.Stderr = origOut, origErr
@@ -54,10 +54,10 @@ func TestInitConfigCreatesDefaultFile(t *testing.T) {
 	viper.Reset()
 
 	tmpHome := filepath.Join(os.TempDir(), "homecfg_create")
-	os.RemoveAll(tmpHome)
-	defer os.RemoveAll(tmpHome)
+	_ = os.RemoveAll(tmpHome)
+	defer func() { _ = os.RemoveAll(tmpHome) }()
 
-	os.Setenv("HOME", tmpHome)
+	_ = os.Setenv("HOME", tmpHome)
 	cfg, err := InitConfig()
 	if err != nil {
 		t.Fatalf("InitConfig error: %v", err)
@@ -81,10 +81,10 @@ func TestInitConfigUsesExistingFile(t *testing.T) {
 	viper.Reset()
 
 	tmpHome := filepath.Join(os.TempDir(), "homecfg_existing")
-	os.RemoveAll(tmpHome)
-	defer os.RemoveAll(tmpHome)
+	_ = os.RemoveAll(tmpHome)
+	defer func() { _ = os.RemoveAll(tmpHome) }()
 
-	os.Setenv("HOME", tmpHome)
+	_ = os.Setenv("HOME", tmpHome)
 	// First call creates defaults and file
 	cfg1, err := InitConfig()
 	if err != nil {
@@ -116,13 +116,13 @@ func TestInitConfigMkdirAllError(t *testing.T) {
 	viper.Reset()
 
 	tmp := filepath.Join(os.TempDir(), "home_ro")
-	os.RemoveAll(tmp)
+	_ = os.RemoveAll(tmp)
 	if err := os.MkdirAll(tmp, 0o555); err != nil {
 		t.Fatalf("failed to create tmp home: %v", err)
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 
-	os.Setenv("HOME", tmp)
+	_ = os.Setenv("HOME", tmp)
 	if _, err := InitConfig(); err == nil {
 		t.Fatal("expected error from MkdirAll")
 	}
@@ -133,10 +133,10 @@ func TestInitConfigWriteError(t *testing.T) {
 	viper.Reset()
 
 	tmpHome := filepath.Join(os.TempDir(), "homecfg_writeerr")
-	os.RemoveAll(tmpHome)
-	defer os.RemoveAll(tmpHome)
+	_ = os.RemoveAll(tmpHome)
+	defer func() { _ = os.RemoveAll(tmpHome) }()
 
-	os.Setenv("HOME", tmpHome)
+	_ = os.Setenv("HOME", tmpHome)
 	baseDir := filepath.Join(tmpHome, ".remake")
 	if err := os.MkdirAll(baseDir, 0o755); err != nil {
 		t.Fatalf("failed to create baseDir: %v", err)
@@ -155,10 +155,10 @@ func TestInitConfigReadConfigError(t *testing.T) {
 	viper.Reset()
 
 	tmpHome := filepath.Join(os.TempDir(), "homecfg_readerr")
-	os.RemoveAll(tmpHome)
+	_ = os.RemoveAll(tmpHome)
 	defer os.RemoveAll(tmpHome)
 
-	os.Setenv("HOME", tmpHome)
+	_ = os.Setenv("HOME", tmpHome)
 	// create valid first config
 	cfg1, err := InitConfig()
 	if err != nil {
@@ -195,7 +195,7 @@ func TestParseReference(t *testing.T) {
 
 	// absolute path
 	abs := filepath.Join(os.TempDir(), "f.txt")
-	os.WriteFile(abs, []byte("x"), 0o644)
+	_ = os.WriteFile(abs, []byte("x"), 0o644)
 	defer os.Remove(abs)
 	if got := cfg.ParseReference(abs); got != ReferenceLocal {
 		t.Errorf("expected Local for absolute path, got %v", got)
@@ -203,7 +203,7 @@ func TestParseReference(t *testing.T) {
 
 	// relative path
 	rel := "f_rel.txt"
-	os.WriteFile(rel, []byte("y"), 0o644)
+	_ = os.WriteFile(rel, []byte("y"), 0o644)
 	defer os.Remove(rel)
 	if got := cfg.ParseReference(rel); got != ReferenceLocal {
 		t.Errorf("expected Local for relative path, got %v", got)
@@ -234,7 +234,7 @@ func TestInitConfigUserHomeDirError(t *testing.T) {
 	}
 	defer func() { userHomeDir = orig }()
 
-	os.Setenv("HOME", "/some/where") // no effect, uso mock
+	_ = os.Setenv("HOME", "/some/where") // no effect, uso mock
 	if _, err := InitConfig(); err == nil {
 		t.Fatal("expected InitConfig to return error when UserHomeDir fails")
 	}

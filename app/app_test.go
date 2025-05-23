@@ -43,8 +43,8 @@ func capture(f func()) (string, string) {
 
 	f()
 
-	wOut.Close()
-	wErr.Close()
+	_ = wOut.Close()
+	_ = wErr.Close()
 	outBytes, _ := io.ReadAll(rOut)
 	errBytes, _ := io.ReadAll(rErr)
 	os.Stdout, os.Stderr = origOut, origErr
@@ -167,7 +167,7 @@ func TestPullPrintsFileContent(t *testing.T) {
 	if err := os.WriteFile(tmpFile, []byte(content), 0o644); err != nil {
 		t.Fatalf("failed to write temp file: %v", err)
 	}
-	defer os.Remove(tmpFile)
+	defer func() { _ = os.Remove(tmpFile) }()
 
 	cfg := &config.Config{}
 	fs := &fakeStoreArgs{pullPath: tmpFile}
@@ -231,8 +231,8 @@ func TestLoginPromptUsernameSuccess(t *testing.T) {
 
 	// simulate user input for username
 	r, w, _ := os.Pipe()
-	w.WriteString("inputUser\n")
-	w.Close()
+	_, _ = w.WriteString("inputUser\n")
+	_ = w.Close()
 	origStdin := os.Stdin
 	os.Stdin = r
 	defer func() { os.Stdin = origStdin }()
@@ -262,7 +262,7 @@ func TestLoginPromptUsernameError(t *testing.T) {
 
 	// empty stdin to force Scanln error
 	r, w, _ := os.Pipe()
-	w.Close()
+	_ = w.Close()
 	origStdin := os.Stdin
 	os.Stdin = r
 	defer func() { os.Stdin = origStdin }()
@@ -289,12 +289,12 @@ func TestLoginPromptPasswordSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open pty: %v", err)
 	}
-	defer master.Close()
-	defer slave.Close()
+	defer func() { _ = master.Close() }()
+	defer func() { _ = slave.Close() }()
 
 	// write password to master
 	go func() {
-		master.Write([]byte("secretPass\n"))
+		_, _ = master.Write([]byte("secretPass\n"))
 	}()
 
 	origStdin := os.Stdin
@@ -327,8 +327,8 @@ func TestLoginPromptPasswordError(t *testing.T) {
 	// skip username prompt
 	origStdin := os.Stdin
 	r, w, _ := os.Pipe()
-	r.Close()
-	w.Close()
+	_ = r.Close()
+	_ = w.Close()
 	os.Stdin = r
 	defer func() { os.Stdin = origStdin }()
 

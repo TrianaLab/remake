@@ -86,8 +86,8 @@ func TestStorePushErrors(t *testing.T) {
 	}
 	// Local reference not supported
 	tmp, _ := os.CreateTemp("", "f*")
-	tmp.WriteString("x")
-	tmp.Close()
+	_, _ = tmp.WriteString("x")
+	_ = tmp.Close()
 	defer os.Remove(tmp.Name())
 	if err := s.Push(context.Background(), tmp.Name(), "path"); err == nil {
 		t.Error("expected error for local push")
@@ -105,8 +105,8 @@ func TestStorePullLocal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	tmp.WriteString("x")
-	tmp.Close()
+	_, _ = tmp.WriteString("x")
+	_ = tmp.Close()
 	defer os.Remove(tmp.Name())
 
 	cfg := &config.Config{}
@@ -123,7 +123,7 @@ func TestStorePullLocal(t *testing.T) {
 func TestStorePullHTTP(t *testing.T) {
 	// Setup HTTP server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("hello"))
+		_, _ = w.Write([]byte("hello"))
 	}))
 	defer server.Close()
 
@@ -142,8 +142,8 @@ func TestStorePullHTTP(t *testing.T) {
 	segments := strings.Split(strings.TrimPrefix(u.Path, "/"), "/")
 	base := append([]string{cfg.CacheDir, u.Host}, segments...)
 	refDir := filepath.Join(append(base, "refs")...)
-	os.MkdirAll(refDir, 0o755)
-	os.Symlink("dummy", filepath.Join(refDir, "latest"))
+	_ = os.MkdirAll(refDir, 0o755)
+	_ = os.Symlink("dummy", filepath.Join(refDir, "latest"))
 
 	// Pull should fetch, cache, and return file path
 	path, err := s.Pull(context.Background(), server.URL)
@@ -165,8 +165,8 @@ func TestStorePushOCICacheSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.Remove(tmpFile.Name())
-	tmpFile.WriteString("all:\n\techo ok")
-	tmpFile.Close()
+	_, _ = tmpFile.WriteString("all:\n\techo ok")
+	_ = tmpFile.Close()
 
 	cfg := &config.Config{DefaultRegistry: "ghcr.io"}
 	s := &ArtifactStore{cfg: cfg}

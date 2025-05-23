@@ -64,7 +64,7 @@ func TestNewCacheVariants(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 
 	cfg := &config.Config{CacheDir: tmp}
 	// HTTP URL
@@ -78,7 +78,7 @@ func TestNewCacheVariants(t *testing.T) {
 	}
 	// Local file
 	localFile := filepath.Join(tmp, "file.txt")
-	os.WriteFile(localFile, []byte(""), 0o644)
+	_ = os.WriteFile(localFile, []byte(""), 0o644)
 	if NewCache(cfg, localFile) != nil {
 		t.Error("expected no cache for local file")
 	}
@@ -89,7 +89,7 @@ func TestHTTPCachePushPull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 
 	cfg := &config.Config{CacheDir: tmp}
 	c := NewHTTPCache(cfg)
@@ -100,8 +100,8 @@ func TestHTTPCachePushPull(t *testing.T) {
 	segments := strings.Split(strings.TrimPrefix(u.Path, "/"), "/")
 	base := append([]string{cfg.CacheDir, u.Host}, segments...)
 	refDir := filepath.Join(append(base, "refs")...)
-	os.MkdirAll(refDir, 0o755)
-	os.Symlink("dummy", filepath.Join(refDir, "latest"))
+	_ = os.MkdirAll(refDir, 0o755)
+	_ = os.Symlink("dummy", filepath.Join(refDir, "latest"))
 
 	data := []byte("hello")
 	if err := c.Push(context.Background(), ref, data); err != nil {
@@ -126,7 +126,7 @@ func TestHTTPCacheMiss(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 
 	cfg := &config.Config{CacheDir: tmp}
 	c := NewHTTPCache(cfg)
@@ -140,7 +140,7 @@ func TestOCIRepositoryPushPull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 
 	cfg := &config.Config{CacheDir: tmp, DefaultRegistry: "reg.io"}
 	c := NewOCIRepository(cfg)
@@ -152,8 +152,8 @@ func TestOCIRepositoryPushPull(t *testing.T) {
 	repoTag := parts[1]
 	repo := strings.SplitN(repoTag, ":", 2)[0]
 	refDir := filepath.Join(cfg.CacheDir, domain, repo, "refs")
-	os.MkdirAll(refDir, 0o755)
-	os.Symlink("dummy", filepath.Join(refDir, "latest"))
+	_ = os.MkdirAll(refDir, 0o755)
+	_ = os.Symlink("dummy", filepath.Join(refDir, "latest"))
 
 	data := []byte("data")
 	if err := c.Push(context.Background(), ref, data); err != nil {
@@ -178,7 +178,7 @@ func TestOCIRepositoryMiss(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 
 	cfg := &config.Config{CacheDir: tmp, DefaultRegistry: "reg.io"}
 	c := NewOCIRepository(cfg)
@@ -210,7 +210,7 @@ func TestHTTPCachePullNotSymlink(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 
 	cfg := &config.Config{CacheDir: tmp}
 	c := NewHTTPCache(cfg)
@@ -239,7 +239,7 @@ func TestHTTPCachePushMkdirAllBlobDirError(t *testing.T) {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
 	tmpFilePath := tmpFile.Name()
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	cfg := &config.Config{CacheDir: tmpFilePath}
 	c := NewHTTPCache(cfg)
@@ -289,7 +289,7 @@ func TestHTTPCachePushCreateTempError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := &config.Config{CacheDir: tmpDir}
 	urlStr := "http://example.com/foo"
@@ -499,7 +499,7 @@ func TestOCIRepositoryPushInvalidReference(t *testing.T) {
 
 func TestOCIRepositoryPushMkdirBlobDirError(t *testing.T) {
 	tmpFile, _ := os.CreateTemp("", "nocache")
-	tmpFile.Close()
+	_ = tmpFile.Close()
 	cfg := &config.Config{CacheDir: tmpFile.Name(), DefaultRegistry: "reg.io"}
 	c := NewOCIRepository(cfg)
 	err := c.Push(context.Background(), "reg.io/repo:tag", []byte("x"))
@@ -712,7 +712,7 @@ func TestOCIRepositoryPullDigestFallback(t *testing.T) {
 	raw := strings.TrimPrefix(ref, "oci://")
 	refObj, _ := name.ParseReference(raw, name.WithDefaultRegistry(cfg.DefaultRegistry))
 	link := filepath.Join(tmp, refObj.Context().RegistryStr(), refObj.Context().RepositoryStr(), "refs", refObj.Identifier())
-	os.Remove(link)
+	_ = os.Remove(link)
 
 	sum := sha256.Sum256(data)
 	digest := "sha256:" + hex.EncodeToString(sum[:])

@@ -97,7 +97,7 @@ func captureCmdOutput(cmd *cobra.Command, args []string) (string, error) {
 	cmd.SetArgs(args)
 	err := cmd.Execute()
 
-	w.Close()
+	_ = w.Close()
 	out, _ := io.ReadAll(r)
 	os.Stdout = old
 	return string(out), err
@@ -108,7 +108,7 @@ func captureOutput(f func()) string {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 	f()
-	w.Close()
+	_ = w.Close()
 	out, _ := io.ReadAll(r)
 	os.Stdout = old
 	return string(out)
@@ -173,7 +173,7 @@ func TestPushCmdErrorPropagation(t *testing.T) {
 func TestPullCmdHTTP(t *testing.T) {
 	// Start test server
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("hello"))
+		_, _ = w.Write([]byte("hello"))
 	}))
 	defer srv.Close()
 
@@ -198,8 +198,8 @@ func TestPullCmdHTTP(t *testing.T) {
 
 func TestRunCmdExecution(t *testing.T) {
 	tmp := os.TempDir() + "/Makefile_test"
-	os.WriteFile(tmp, []byte("all:\n\techo ok"), 0o644)
-	defer os.Remove(tmp)
+	_ = os.WriteFile(tmp, []byte("all:\n\techo ok"), 0o644)
+	defer func() { _ = os.Remove(tmp) }()
 
 	cfg, _ := config.InitConfig()
 	a := app.New(cfg)
@@ -248,7 +248,7 @@ func TestExecute_InitConfigFatal(t *testing.T) {
 	}
 
 	// run Execute; it should call fatalFunc("boom init")
-	Execute()
+	_ = Execute()
 
 	if !called {
 		t.Fatal("expected fatalFunc to be called")

@@ -116,7 +116,7 @@ func (c *OCIClient) Push(ctx context.Context, reference, path string) error {
 	if err != nil {
 		return err
 	}
-	defer fs.Close()
+	defer func() { _ = fs.Close() }()
 
 	mediaType := "application/vnd.remake.file"
 	fileDesc, err := fs.Add(ctx, path, mediaType, "")

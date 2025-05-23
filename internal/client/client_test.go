@@ -95,7 +95,7 @@ func TestNewClientTypes(t *testing.T) {
 
 func TestHTTPClientPullSuccess(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	}))
 	defer server.Close()
 
@@ -139,7 +139,7 @@ func TestNewClientLocalReferenceDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmp.Name())
+	defer func() { _ = os.Remove(tmp.Name()) }()
 
 	cfg := &config.Config{}
 	c := NewClient(cfg, tmp.Name())
@@ -222,7 +222,7 @@ func TestOCIClientLoginSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp config file: %v", err)
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 	defer os.Remove(tmpFile.Name())
 	viper.SetConfigFile(tmpFile.Name())
 
@@ -262,7 +262,7 @@ func TestOCIClientLoginPingError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp config file: %v", err)
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 	defer os.Remove(tmpFile.Name())
 	viper.SetConfigFile(tmpFile.Name())
 
@@ -357,7 +357,6 @@ type mockMemoryStore struct {
 	fetchAllError error
 	manifestData  []byte
 	layerData     []byte
-	emptyLayers   bool
 	*memory.Store
 }
 
@@ -417,8 +416,8 @@ func TestOCIClientPushWithCredentials(t *testing.T) {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
-	tmpFile.WriteString("test content")
-	tmpFile.Close()
+	_, _ = tmpFile.WriteString("test content")
+	_ = tmpFile.Close()
 
 	// Mock newRepository to return a repository we can inspect
 	orig := newRepository
@@ -497,8 +496,8 @@ func TestOCIClientPushFileStoreCloseError(t *testing.T) {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
-	tmpFile.WriteString("test content")
-	tmpFile.Close()
+	_, _ = tmpFile.WriteString("test content")
+	_ = tmpFile.Close()
 
 	orig := newFileStore
 	defer func() { newFileStore = orig }()
@@ -543,8 +542,8 @@ func TestOCIClientPushPackManifestError(t *testing.T) {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
-	tmpFile.WriteString("test content")
-	tmpFile.Close()
+	_, _ = tmpFile.WriteString("test content")
+	_ = tmpFile.Close()
 
 	origFileStore := newFileStore
 	defer func() { newFileStore = origFileStore }()
@@ -573,8 +572,8 @@ func TestOCIClientPushEmptyDigestError(t *testing.T) {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
-	tmpFile.WriteString("test content")
-	tmpFile.Close()
+	_, _ = tmpFile.WriteString("test content")
+	_ = tmpFile.Close()
 
 	origFileStore := newFileStore
 	defer func() { newFileStore = origFileStore }()
@@ -607,8 +606,8 @@ func TestOCIClientPushTaggingError(t *testing.T) {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
-	tmpFile.WriteString("test content")
-	tmpFile.Close()
+	_, _ = tmpFile.WriteString("test content")
+	_ = tmpFile.Close()
 
 	origFileStore := newFileStore
 	defer func() { newFileStore = origFileStore }()
@@ -641,8 +640,8 @@ func TestOCIClientPushCopyError(t *testing.T) {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
-	tmpFile.WriteString("test content")
-	tmpFile.Close()
+	_, _ = tmpFile.WriteString("test content")
+	_ = tmpFile.Close()
 
 	origFileStore := newFileStore
 	defer func() { newFileStore = origFileStore }()
@@ -798,15 +797,6 @@ func (m *MockStore) Exists(ctx context.Context, target v1.Descriptor) (bool, err
 func (m *MockStore) Tag(ctx context.Context, desc v1.Descriptor, reference string) error {
 	args := m.Called(ctx, desc, reference)
 	return args.Error(0)
-}
-
-// Helper function to create a valid manifest descriptor
-func createManifestDescriptor() v1.Descriptor {
-	return v1.Descriptor{
-		MediaType: "application/vnd.oci.image.manifest.v1+json",
-		Digest:    "sha256:abcd1234",
-		Size:      1234,
-	}
 }
 
 // Helper function to create a valid manifest with layers

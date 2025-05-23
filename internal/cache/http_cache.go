@@ -72,7 +72,7 @@ func (c *HTTPCache) Push(ctx context.Context, reference string, data []byte) err
 		return err
 	}
 	if _, err := copyData(f, bytes.NewReader(data)); err != nil {
-		f.Close()
+		_ = f.Close()
 		return err
 	}
 	if err := closeFile(f); err != nil {
