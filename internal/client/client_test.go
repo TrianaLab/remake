@@ -223,7 +223,8 @@ func TestOCIClientLoginSuccess(t *testing.T) {
 		t.Fatalf("failed to create temp config file: %v", err)
 	}
 	_ = tmpFile.Close()
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+
 	viper.SetConfigFile(tmpFile.Name())
 
 	retry.DefaultClient = server.Client()
@@ -263,7 +264,7 @@ func TestOCIClientLoginPingError(t *testing.T) {
 		t.Fatalf("failed to create temp config file: %v", err)
 	}
 	_ = tmpFile.Close()
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 	viper.SetConfigFile(tmpFile.Name())
 
 	retry.DefaultClient = server.Client()
@@ -415,7 +416,7 @@ func TestOCIClientPushWithCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 	_, _ = tmpFile.WriteString("test content")
 	_ = tmpFile.Close()
 
@@ -495,7 +496,7 @@ func TestOCIClientPushFileStoreCloseError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 	_, _ = tmpFile.WriteString("test content")
 	_ = tmpFile.Close()
 
@@ -541,7 +542,7 @@ func TestOCIClientPushPackManifestError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 	_, _ = tmpFile.WriteString("test content")
 	_ = tmpFile.Close()
 
@@ -571,7 +572,7 @@ func TestOCIClientPushEmptyDigestError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 	_, _ = tmpFile.WriteString("test content")
 	_ = tmpFile.Close()
 
@@ -605,7 +606,7 @@ func TestOCIClientPushTaggingError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 	_, _ = tmpFile.WriteString("test content")
 	_ = tmpFile.Close()
 
@@ -639,7 +640,7 @@ func TestOCIClientPushCopyError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 	_, _ = tmpFile.WriteString("test content")
 	_ = tmpFile.Close()
 

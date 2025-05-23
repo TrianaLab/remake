@@ -255,7 +255,7 @@ func TestHTTPCachePushRemoveError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := &config.Config{CacheDir: tmpDir}
 	urlStr := "http://example.org/baz"
@@ -322,7 +322,7 @@ func TestHTTPCachePushMkdirAllRefsError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := &config.Config{CacheDir: tmpDir}
 	urlStr := "http://localhost/bar"
@@ -352,7 +352,7 @@ func TestHTTPCachePushCopyError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = (os.RemoveAll(tmpDir)) }()
 
 	copyData = func(dst io.Writer, src io.Reader) (int64, error) {
 		return 0, fmt.Errorf("copy failure")
@@ -372,7 +372,7 @@ func TestHTTPCachePushCloseError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	createFile = func(name string) (*os.File, error) {
 		return os.NewFile(uintptr(0xffff), name), nil
@@ -392,7 +392,7 @@ func TestHTTPCachePushRenameError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := &config.Config{CacheDir: tmpDir}
 	c := NewHTTPCache(cfg)
@@ -425,7 +425,7 @@ func TestHTTPCachePushCloseErrorBranch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	closeFile = func(f *os.File) error { return fmt.Errorf("close failed") }
 	defer restoreFactories()
@@ -443,7 +443,7 @@ func TestHTTPCachePushSymlinkErrorBranch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	symlink = func(oldname, newname string) error { return fmt.Errorf("symlink failed") }
 	defer restoreFactories()
@@ -461,7 +461,7 @@ func TestHTTPCachePullReadlinkErrorBranch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	ref := "http://host/link"
 	u, _ := url.Parse(ref)
@@ -510,7 +510,7 @@ func TestOCIRepositoryPushMkdirBlobDirError(t *testing.T) {
 
 func TestOCIRepositoryPushCreateTempFileError(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "tmpdir")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 	cfg := &config.Config{CacheDir: tmpDir, DefaultRegistry: "reg.io"}
 	c := NewOCIRepository(cfg)
 
@@ -528,7 +528,7 @@ func TestOCIRepositoryPushCreateTempFileError(t *testing.T) {
 
 func TestOCIRepositoryPushCopyError(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "copyerroci")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 	cfg := &config.Config{CacheDir: tmpDir, DefaultRegistry: "reg.io"}
 	c := NewOCIRepository(cfg)
 
@@ -545,7 +545,7 @@ func TestOCIRepositoryPushCopyError(t *testing.T) {
 
 func TestOCIRepositoryPushCloseError(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "closeerroci")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 	cfg := &config.Config{CacheDir: tmpDir, DefaultRegistry: "reg.io"}
 	c := NewOCIRepository(cfg)
 
@@ -562,7 +562,7 @@ func TestOCIRepositoryPushCloseError(t *testing.T) {
 
 func TestOCIRepositoryPushRenameError(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "renameerroci")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 	cfg := &config.Config{CacheDir: tmpDir, DefaultRegistry: "reg.io"}
 	c := NewOCIRepository(cfg)
 
@@ -579,7 +579,7 @@ func TestOCIRepositoryPushRenameError(t *testing.T) {
 
 func TestOCIRepositoryPushMkdirRefsError(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "refserroci")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 	cfg := &config.Config{CacheDir: tmpDir, DefaultRegistry: "reg.io"}
 	c := NewOCIRepository(cfg)
 
@@ -599,7 +599,7 @@ func TestOCIRepositoryPushMkdirRefsError(t *testing.T) {
 
 func TestOCIRepositoryPushRemoveError(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "removeerroci")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 	cfg := &config.Config{CacheDir: tmpDir, DefaultRegistry: "reg.io"}
 	c := NewOCIRepository(cfg)
 
@@ -616,7 +616,7 @@ func TestOCIRepositoryPushRemoveError(t *testing.T) {
 
 func TestOCIRepositoryPushSymlinkError(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "symlinkerroci")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 	cfg := &config.Config{CacheDir: tmpDir, DefaultRegistry: "reg.io"}
 	c := NewOCIRepository(cfg)
 
@@ -668,7 +668,7 @@ func TestOCIRepositoryPullNotSymlink(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 
 	cfg := &config.Config{CacheDir: tmp, DefaultRegistry: "reg.io"}
 	c := NewOCIRepository(cfg)
@@ -699,7 +699,7 @@ func TestOCIRepositoryPullDigestFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 
 	cfg := &config.Config{CacheDir: tmp, DefaultRegistry: "reg.io"}
 	c := NewOCIRepository(cfg)
@@ -751,7 +751,7 @@ func TestOCIRepositoryPullReadlinkErrorBranch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := &config.Config{CacheDir: tmpDir, DefaultRegistry: "reg.io"}
 	c := NewOCIRepository(cfg)

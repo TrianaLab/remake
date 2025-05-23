@@ -156,7 +156,7 @@ func TestInitConfigReadConfigError(t *testing.T) {
 
 	tmpHome := filepath.Join(os.TempDir(), "homecfg_readerr")
 	_ = os.RemoveAll(tmpHome)
-	defer os.RemoveAll(tmpHome)
+	defer func() { _ = os.RemoveAll(tmpHome) }()
 
 	_ = os.Setenv("HOME", tmpHome)
 	// create valid first config
@@ -196,7 +196,7 @@ func TestParseReference(t *testing.T) {
 	// absolute path
 	abs := filepath.Join(os.TempDir(), "f.txt")
 	_ = os.WriteFile(abs, []byte("x"), 0o644)
-	defer os.Remove(abs)
+	defer func() { _ = os.Remove(abs) }()
 	if got := cfg.ParseReference(abs); got != ReferenceLocal {
 		t.Errorf("expected Local for absolute path, got %v", got)
 	}
@@ -204,7 +204,8 @@ func TestParseReference(t *testing.T) {
 	// relative path
 	rel := "f_rel.txt"
 	_ = os.WriteFile(rel, []byte("y"), 0o644)
-	defer os.Remove(rel)
+	defer func() { _ = os.Remove(rel) }()
+
 	if got := cfg.ParseReference(rel); got != ReferenceLocal {
 		t.Errorf("expected Local for relative path, got %v", got)
 	}

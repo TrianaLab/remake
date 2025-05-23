@@ -88,7 +88,7 @@ func TestStorePushErrors(t *testing.T) {
 	tmp, _ := os.CreateTemp("", "f*")
 	_, _ = tmp.WriteString("x")
 	_ = tmp.Close()
-	defer os.Remove(tmp.Name())
+	defer func() { _ = os.Remove(tmp.Name()) }()
 	if err := s.Push(context.Background(), tmp.Name(), "path"); err == nil {
 		t.Error("expected error for local push")
 	}
@@ -107,7 +107,7 @@ func TestStorePullLocal(t *testing.T) {
 	}
 	_, _ = tmp.WriteString("x")
 	_ = tmp.Close()
-	defer os.Remove(tmp.Name())
+	defer func() { _ = os.Remove(tmp.Name()) }()
 
 	cfg := &config.Config{}
 	s := New(cfg)
@@ -132,7 +132,7 @@ func TestStorePullHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := &config.Config{CacheDir: tmpDir, NoCache: true}
 	s := New(cfg)
@@ -164,7 +164,8 @@ func TestStorePushOCICacheSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+
 	_, _ = tmpFile.WriteString("all:\n\techo ok")
 	_ = tmpFile.Close()
 
