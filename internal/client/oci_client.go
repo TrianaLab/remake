@@ -87,19 +87,23 @@ func (c *OCIClient) Login(ctx context.Context, registry, user, pass string) erro
 // Push uploads the local file at path as an OCI artifact to the given reference.
 // It tags the artifact with the reference identifier and pushes it to the remote repository.
 func (c *OCIClient) Push(ctx context.Context, reference, path string) error {
+	// Validate and parse reference
 	if strings.Contains(reference, "://") && !strings.HasPrefix(reference, "oci://") {
 		return fmt.Errorf("invalid OCI reference: %s", reference)
 	}
-	raw := strings.TrimPrefix(reference, "oci://")
+	raw := strings.ToLower(strings.TrimPrefix(reference, "oci://"))
 	ref, err := name.ParseReference(raw, name.WithDefaultRegistry(c.cfg.DefaultRegistry))
 	if err != nil {
 		return err
 	}
 	repoRef := ref.Context()
+
 	repo, err := newRepository(repoRef.RegistryStr() + "/" + repoRef.RepositoryStr())
 	if err != nil {
 		return err
 	}
+
+	// Authenticate if credentials present
 	key := config.NormalizeKey(repoRef.RegistryStr())
 	user := viper.GetString("registries." + key + ".username")
 	pass := viper.GetString("registries." + key + ".password")
@@ -111,19 +115,28 @@ func (c *OCIClient) Push(ctx context.Context, reference, path string) error {
 		}
 	}
 
-	dir := filepath.Dir(path)
+	// Resolve absolute path and split directory
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path %s: %w", path, err)
+	}
+	dir := filepath.Dir(absPath)
+
+	// Prepare a file store rooted at the file's directory
 	fs, err := newFileStore(dir)
 	if err != nil {
-		return err
+		return fmt.Errorf("creating file store: %w", err)
 	}
 	defer func() { _ = fs.Close() }()
 
+	// Add the file using its absolute path to ensure tests find it
 	mediaType := "application/vnd.remake.file"
-	fileDesc, err := fs.Add(ctx, path, mediaType, "")
+	fileDesc, err := fs.Add(ctx, absPath, mediaType, "")
 	if err != nil {
 		return fmt.Errorf("adding file to store: %w", err)
 	}
 
+	// Pack manifest using injected function
 	artifactType := "application/vnd.remake.artifact"
 	opts := oras.PackManifestOptions{Layers: []v1.Descriptor{fileDesc}}
 	manifestDesc, err := packManifest(ctx, fs, oras.PackManifestVersion1_1, artifactType, opts)
@@ -137,6 +150,7 @@ func (c *OCIClient) Push(ctx context.Context, reference, path string) error {
 	tag := ref.Identifier()
 	_ = fs.Tag(ctx, manifestDesc, tag)
 
+	// Push to remote using injected function
 	if _, err := copyFunc(ctx, fs, tag, repo, tag, oras.DefaultCopyOptions); err != nil {
 		return fmt.Errorf("pushing to remote: %w", err)
 	}
@@ -149,7 +163,7 @@ func (c *OCIClient) Pull(ctx context.Context, reference string) ([]byte, error) 
 	if strings.Contains(reference, "://") && !strings.HasPrefix(reference, "oci://") {
 		return nil, fmt.Errorf("invalid OCI reference: %s", reference)
 	}
-	raw := strings.TrimPrefix(reference, "oci://")
+	raw := strings.ToLower(strings.TrimPrefix(reference, "oci://"))
 	ref, err := name.ParseReference(raw, name.WithDefaultRegistry(c.cfg.DefaultRegistry))
 	if err != nil {
 		return nil, err

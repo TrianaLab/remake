@@ -54,7 +54,7 @@ func (c *OCIRepository) Push(ctx context.Context, reference string, data []byte)
 	if strings.Contains(reference, "://") && !strings.HasPrefix(reference, "oci://") {
 		return fmt.Errorf("invalid OCI reference: %s", reference)
 	}
-	raw := strings.TrimPrefix(reference, "oci://")
+	raw := strings.ToLower(strings.TrimPrefix(reference, "oci://"))
 	ref, err := parseRef(raw, name.WithDefaultRegistry(c.cfg.DefaultRegistry))
 	if err != nil {
 		return err
@@ -115,7 +115,7 @@ func (c *OCIRepository) Pull(ctx context.Context, reference string) (string, err
 	if strings.Contains(reference, "://") && !strings.HasPrefix(reference, "oci://") {
 		return "", fmt.Errorf("invalid OCI reference: %s", reference)
 	}
-	raw := strings.TrimPrefix(reference, "oci://")
+	raw := strings.ToLower(strings.TrimPrefix(reference, "oci://"))
 
 	ref, err := name.ParseReference(raw, name.WithDefaultRegistry(c.cfg.DefaultRegistry))
 	if err != nil {
