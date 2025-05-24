@@ -4,10 +4,29 @@
 [![codecov](https://codecov.io/gh/TrianaLab/remake/graph/badge.svg?token=DI2AL1DL9T)](https://codecov.io/gh/TrianaLab/remake)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-
 # Remake CLI 🚀
 
 Remake is a powerful CLI tool that packages, distributes, and runs Makefiles as OCI artifacts. It enables centralized management of build scripts, seamless integration into CI/CD pipelines, and consistent execution across environments.
+
+## 🗂️ Catalog
+
+This repository includes a **Makefile catalog** under `catalog/`, providing reusable OCI-published Makefiles organized by category:
+
+* **Runtimes** (`catalog/runtimes/`):
+
+  * `make-os.mk`: Detect host OS, distribution, version, and architecture.
+  * `make-podman.mk`: Install and start Podman runtime from upstream binaries.
+* **Services** (`catalog/services/`):
+
+  * `make-redis.mk`: Spin up a Redis container via Podman with configurable password, port, and data volume.
+
+Each Makefile declares its own `VERSION := x.y.z` and bootstraps any lower-level dependencies automatically (OS detection, Podman). Simply invoke the highest-level Makefile:
+
+```bash
+remake run -f oci://ghcr.io/TrianaLab/make-redis:latest run
+# Or if you feel lazy today, you can just run:
+remake run -f trianalab/make-redis run
+```
 
 ## 🌟 Benefits
 
@@ -28,11 +47,11 @@ curl -fsSL https://raw.githubusercontent.com/TrianaLab/remake/main/scripts/get-r
 This command downloads and runs an installation script that:
 
 1. Fetches the latest `remake` binary.
-2. Places it in your first available folder within `PATH` otherwise at `~/.local/bin`.
+2. Places it in under `/usr/local/bin`.
 
 ### Go Installation
 
-Make sure your `GOPATH/bin` or Go `bin` directory is in your `PATH`.
+Make sure your Go `bin` directory is in your `PATH`:
 
 ```bash
 go install github.com/TrianaLab/remake@latest
@@ -118,20 +137,18 @@ remake version
 
 ## 🤝 Contributing
 
-We love contributions! To contribute:
-
 1. Fork the repository.
-2. Create a new branch: `git checkout -b feature/YourFeature`.
-3. Make your changes and add tests.
-4. Ensure all tests pass: `go test ./...`.
-5. Submit a pull request describing your changes.
-
-Please follow the existing code style and include documentation for any new features.
+2. Create a new branch: `git checkout -b feature/<YourFeature>`.
+3. Add or update Makefile artifacts under `catalog/`, setting `VERSION := x.y.z`.
+4. Ensure new/updated `*.mk` includes `install`, `status`/`run` targets.
+5. Commit and push—CI will publish artifacts automatically to GHCR.
+6. Open a Pull Request describing your changes.
 
 ## 📜 License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+MIT © TrianaLab. See the [LICENSE](LICENSE) file for details.
+
 
 ## 📝 NOTICE
 
-Additional legal and licensing information is provided in the [NOTICE](NOTICE.md) file.
+See [NOTICE.md](NOTICE.md) for additional legal and licensing details.
