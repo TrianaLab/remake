@@ -3,12 +3,15 @@ ifeq ($(GOBIN),)
 	GOBIN := $(shell go env GOPATH)/bin
 endif
 
+VERSION   ?= $(shell git rev-parse HEAD)
+LDFLAGS    = -X 'github.com/TrianaLab/remake/config.buildVersion=$(VERSION)'
+
 .PHONY: all build install test coverage lint clean
 
 all: build
 
 build:
-	go build -o bin/remake .
+	go build -ldflags "$(LDFLAGS)" -o bin/remake .
 
 install: build
 	@echo "Installing remake to $(GOBIN)"

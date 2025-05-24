@@ -74,6 +74,9 @@ type Config struct {
 // userHomeDir allows us to override os.UserHomeDir in tests.
 var userHomeDir = os.UserHomeDir
 
+// buildVersion is populated via -ldflags at build time.
+var buildVersion = "dev"
+
 // InitConfig initializes directory structure and loads configuration from
 // ~/.remake/config.yaml, applying defaults for all settings.
 func InitConfig() (*Config, error) {
@@ -96,7 +99,7 @@ func InitConfig() (*Config, error) {
 	viper.SetDefault("cacheDir", filepath.Join(baseDir, "cache"))
 	viper.SetDefault("defaultMakefile", "makefile")
 	viper.SetDefault("defaultRegistry", "ghcr.io")
-	viper.SetDefault("version", "dev")
+	viper.SetDefault("version", buildVersion)
 	viper.SetDefault("noCache", false)
 
 	// Create default config file if it does not exist

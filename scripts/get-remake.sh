@@ -1,84 +1,160 @@
 #!/usr/bin/env bash
 set -e
 
-REPO="TrianaLab/remake"
-API_URL="https://api.github.com/repos/$REPO/releases/latest"
+: ${BINARY_NAME:="remake"}
+: ${USE_SUDO:="true"}
+: ${DEBUG:="false"}
+: ${REMAKE_INSTALL_DIR:="/usr/local/bin"}
+: ${REPO:="TrianaLab/remake"}
+: ${API_URL:="https://api.github.com/repos/$REPO/releases"}
 
-detect_os_arch() {
-  OS="$(uname | tr '[:upper:]' '[:lower:]')"
+HAS_CURL="$(type curl >/dev/null 2>&1 && echo true || echo false)"
+HAS_WGET="$(type wget >/dev/null 2>&1 && echo true || echo false)"
+
+initArch() {
+  ARCH=$(uname -m)
+  case $ARCH in
+    x86_64|amd64) ARCH="amd64";;
+    aarch64|arm64) ARCH="arm64";;
+    *) echo "Unsupported architecture: $ARCH" >&2; exit 1;;
+  esac
+}
+
+initOS() {
+  OS=$(uname | tr '[:upper:]' '[:lower:]')
   case "$OS" in
-    linux|darwin|mingw*|msys*|cygwin*)
-      if [[ "$OS" == mingw* || "$OS" == msys* || "$OS" == cygwin* ]]; then
-        OS="windows"
+    linux|darwin) ;;
+    mingw*|msys*|cygwin*) OS="windows";;
+    *) echo "Unsupported OS: $OS" >&2; exit 1;;
+  esac
+}
+
+runAsRoot() {
+  if [ "$USE_SUDO" = "true" ] && [ "$(id -u)" -ne 0 ]; then
+    sudo "$@"
+  else
+    "$@"
+  fi
+}
+
+verifySupported() {
+  supported="linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64 windows-arm64"
+  if ! echo "$supported" | grep -qw "$OS-$ARCH"; then
+    echo "No prebuilt binary for $OS-$ARCH" >&2
+    exit 1
+  fi
+  if [ "$HAS_CURL" != "true" ] && [ "$HAS_WGET" != "true" ]; then
+    echo "curl or wget is required" >&2
+    exit 1
+  fi
+}
+
+checkDesiredVersion() {
+  if [ -z "$DESIRED_VERSION" ]; then
+    if [ "$HAS_CURL" = "true" ]; then
+      TAG=$(curl -sSL "$API_URL/latest" | grep -E '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    else
+      TAG=$(wget -qO- "$API_URL/latest" | grep -E '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    fi
+    if [ -z "$TAG" ]; then
+      echo "Failed to fetch latest version" >&2
+      exit 1
+    fi
+  else
+    TAG="$DESIRED_VERSION"
+    status_code=0
+    if [ "$HAS_CURL" = "true" ]; then
+      status_code=$(curl -sSL -o /dev/null -w "%{http_code}" "$API_URL/tags/$TAG")
+    else
+      status_code=$(wget --server-response --spider -q "https://api.github.com/repos/$REPO/releases/tags/$TAG" 2>&1 | awk '/HTTP\//{print $2}')
+    fi
+    if [ "$status_code" != "200" ]; then
+      echo "Version $TAG not found in $REPO releases" >&2
+      exit 1
+    fi
+  fi
+}
+
+checkInstalledVersion() {
+  if [ -f "$REMAKE_INSTALL_DIR/$BINARY_NAME$EXT" ]; then
+    INSTALLED=$("$REMAKE_INSTALL_DIR/$BINARY_NAME$EXT" version 2>/dev/null || true)
+    if [ "$INSTALLED" = "$TAG" ]; then
+      echo "$BINARY_NAME $TAG is already installed"
+      exit 0
+    fi
+  fi
+}
+
+downloadFile() {
+  filename="${BINARY_NAME}_${OS}_${ARCH}${EXT}"
+  url="https://github.com/$REPO/releases/download/$TAG/$filename"
+  tmp="$(mktemp -d)"
+  target="$tmp/$filename"
+  if [ "$HAS_CURL" = "true" ]; then
+    curl -sSL "$url" -o "$target"
+  else
+    wget -qO "$target" "$url"
+  fi
+  chmod +x "$target"
+  mv "$target" "$tmp/$BINARY_NAME$EXT"
+  DOWNLOAD_DIR="$tmp"
+}
+
+installFile() {
+  runAsRoot mv "$DOWNLOAD_DIR/$BINARY_NAME$EXT" "$REMAKE_INSTALL_DIR/"
+  echo "$BINARY_NAME installed to $REMAKE_INSTALL_DIR/$BINARY_NAME$EXT"
+}
+
+help() {
+  echo "Usage: install.sh [--version <version>] [--no-sudo] [--help]"
+  echo "  --version, -v specify version (e.g. v1.2.3)"
+  echo "  --no-sudo     disable sudo for installation"
+  echo "  --help, -h    show help"
+}
+
+cleanup() {
+  [ -n "$DOWNLOAD_DIR" ] && rm -rf "$DOWNLOAD_DIR"
+}
+
+trap cleanup EXIT
+
+while [ $# -gt 0 ]; do
+  case $1 in
+    --version|-v)
+      shift
+      if [ -n "$1" ]; then
+        DESIRED_VERSION="$1"
+      else
+        echo "Expected version after $1" >&2
+        exit 1
       fi
       ;;
+    --no-sudo)
+      USE_SUDO="false"
+      ;;
+    --help|-h)
+      help
+      exit 0
+      ;;
     *)
-      echo "Unsupported OS: $OS" >&2
+      echo "Unknown option: $1" >&2
+      help
       exit 1
       ;;
   esac
+  shift
+done
 
-  ARCH="$(uname -m)"
-  case "$ARCH" in
-    x86_64|amd64) ARCH="amd64" ;;
-    aarch64|arm64) ARCH="arm64" ;;
-    *)
-      echo "Unsupported architecture: $ARCH" >&2
-      exit 1
-      ;;
-  esac
+initArch
+initOS
+verifySupported
+checkDesiredVersion
 
-  EXT=""
-  if [ "$OS" = "windows" ]; then
-    EXT=".exe"
-  fi
+EXT=""
+if [ "$OS" = "windows" ]; then
+  EXT=".exe"
+fi
 
-  echo "${OS}" "${ARCH}" "${EXT}"
-}
-
-fetch_latest_tag() {
-  curl -sSL "$API_URL" \
-    | grep -E '"tag_name":' \
-    | sed -E 's/.*"([^"]+)".*/\1/'
-}
-
-find_install_dir() {
-  IFS=':' read -r -a paths <<< "$PATH"
-  for dir in "${paths[@]}"; do
-    if [ -d "$dir" ] && [ -w "$dir" ]; then
-      echo "$dir"
-      return
-    fi
-  done
-  echo ""
-}
-
-install_binary() {
-  os="$1"; arch="$2"; ext="$3"; tag="$4"
-  filename="remake_${os}_${arch}${ext}"
-  url="https://github.com/$REPO/releases/download/$tag/$filename"
-
-  tmpdir="$(mktemp -d)"
-  target="$tmpdir/$filename"
-
-  curl -sSL "$url" -o "$target"
-  chmod +x "$target"
-
-  install_dir="$(find_install_dir)"
-  if [ -z "$install_dir" ]; then
-    install_dir="$HOME/.local/bin"
-    mkdir -p "$install_dir"
-    echo "Warning: no writable dir in PATH, installing into $install_dir" >&2
-  fi
-
-  mv "$target" "$install_dir/remake${ext}"
-  echo "Installed remake to $install_dir/remake${ext}"
-}
-
-main() {
-  read -r os arch ext <<<"$(detect_os_arch)"
-  tag="$(fetch_latest_tag)"
-  install_binary "$os" "$arch" "$ext" "$tag"
-}
-
-main
+checkInstalledVersion
+downloadFile
+installFile
