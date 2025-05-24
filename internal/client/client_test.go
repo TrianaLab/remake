@@ -537,6 +537,24 @@ func TestOCIClientPushFileStoreCloseError(t *testing.T) {
 	}
 }
 
+func TestOCIClientPushAbsPathError(t *testing.T) {
+	// Stub absPathFunc to simulate failure
+	origAbs := absPathFunc
+	defer func() { absPathFunc = origAbs }()
+	absPathFunc = func(path string) (string, error) {
+		return "", fmt.Errorf("abs error")
+	}
+
+	cfg := &config.Config{DefaultRegistry: "example.com"}
+	client := NewOCIClient(cfg)
+
+	// Call Push: path value doesn't matter, stub will error first
+	err := client.Push(context.Background(), "oci://example.com/repo:tag", "somepath")
+	if err == nil || !strings.Contains(err.Error(), "failed to resolve absolute path somepath: abs error") {
+		t.Errorf("expected abs path error, got %v", err)
+	}
+}
+
 func TestOCIClientPushPackManifestError(t *testing.T) {
 	tmpFile, err := os.CreateTemp("", "test*.txt")
 	if err != nil {

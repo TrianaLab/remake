@@ -49,6 +49,7 @@ var (
 	packManifest   = oras.PackManifest
 	copyFunc       = oras.Copy
 	contentFetcher = content.FetchAll
+	absPathFunc    = filepath.Abs
 )
 
 // OCIClient provides an implementation of Client for OCI registries.
@@ -116,7 +117,7 @@ func (c *OCIClient) Push(ctx context.Context, reference, path string) error {
 	}
 
 	// Resolve absolute path and split directory
-	absPath, err := filepath.Abs(path)
+	absPath, err := absPathFunc(path)
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path %s: %w", path, err)
 	}
