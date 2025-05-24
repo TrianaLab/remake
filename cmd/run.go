@@ -57,7 +57,6 @@ downloads; use --no-cache to force re-download. Any flags provided via
 
   # Execute target from remote Makefile artifact, bypassing cache
   remake run -f ghcr.io/myorg/myrepo:latest --no-cache deploy`,
-		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app.Cfg.NoCache = noCache
 			return app.Run(context.Background(), file, makeFlags, args)
