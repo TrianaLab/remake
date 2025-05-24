@@ -27,6 +27,3 @@ go.work.sum
 
 # VSCode
 .vscode/
-
-# Makefiles
-*.mk
