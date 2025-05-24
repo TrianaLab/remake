@@ -1,0 +1,49 @@
+name: Publish Catalog Makefiles
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'catalog/**/*.mk'
+
+permissions:
+  packages: write
+  contents: read
+
+jobs:
+  publish-catalog:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4.2.2
+
+    - name: Install Remake CLI
+      run: |
+        curl -fsSL https://raw.githubusercontent.com/TrianaLab/remake/main/scripts/get-remake.sh | bash
+
+    - name: Login to GitHub Container Registry
+      run: |
+        remake login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Determine release tag
+      id: tag
+      run: |
+        git fetch --tags
+        echo "::set-output name=VERSION::$(git describe --tags --abbrev=0)"
+
+    - name: Publish Makefiles as OCI artifacts
+      run: |
+        for filepath in catalog/**/*.mk; do
+          NAME=$(basename "$filepath" .mk)
+
+          # Extract version defined in the Makefile (requires each .mk to define VERSION := x.y.z)
+          VERSION=$(grep -E '^VERSION[[:space:]]*:?=' "$filepath" | head -n1 | sed 's/.*[:=]\s*//')
+
+          if [ -z "$VERSION" ]; then
+            echo "[warning] No VERSION found in $filepath, skipping"
+            continue
+          fi
+
+          echo "Publishing $filepath as tags: $VERSION, latest"
+          remake push -f "$filepath" ghcr.io/TrianaLab/$NAME:$VERSION
+          remake push -f "$filepath" ghcr.io/TrianaLab/$NAME:latest
+        done
