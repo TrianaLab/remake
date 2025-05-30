@@ -4,7 +4,7 @@ ifeq ($(GOBIN),)
 endif
 
 VERSION   ?= $(shell git rev-parse HEAD)
-LDFLAGS    = -X 'github.com/TrianaLab/remake/config.buildVersion=$(VERSION)'
+LDFLAGS   = -s -w -X github.com/TrianaLab/remake/config.buildVersion=$(VERSION)
 
 .PHONY: all build install test coverage lint clean
 

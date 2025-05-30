@@ -44,7 +44,7 @@ This is useful for verifying the installed version and checking for updates.
   if [ "$(remake version)" != "v1.2.3" ]; then echo "Update available"; fi`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println(app.Cfg.Version)
+			fmt.Printf("Remake version: %s\n", app.Cfg.Version)
 			return nil
 		},
 	}

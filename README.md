@@ -23,9 +23,9 @@ This repository includes a **Makefile catalog** under `catalog/`, providing reus
 Each Makefile declares its own `VERSION := x.y.z` and bootstraps any lower-level dependencies automatically (OS detection, Podman). Simply invoke the highest-level Makefile:
 
 ```bash
-remake run -f oci://ghcr.io/TrianaLab/make-redis:latest run
+remake run -f oci://ghcr.io/TrianaLab/make-os:latest detect
 # Or if you feel lazy today, you can just run:
-remake run -f trianalab/make-redis run
+remake run -f trianalab/make-os detect
 ```
 
 ## 🌟 Benefits
